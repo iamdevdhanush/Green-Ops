@@ -1,0 +1,29 @@
+# GreenOps Agent Requirements
+# Python 3.8+
+
+# HTTP Client
+requests==2.31.0
+urllib3==2.1.0
+
+# System Information
+psutil==5.9.6
+
+# Configuration
+python-dotenv==1.0.0
+
+# Date/Time
+python-dateutil==2.8.2
+
+# Utilities
+colorama==0.4.6  # For colored console output
+
+# Platform-specific (Linux only)
+# Install with: pip install -r requirements.txt
+# For xprintidle on Linux: sudo apt-get install xprintidle
+
+# Windows-specific (automatically available)
+# pywin32  # Usually pre-installed on Windows
+
+# Testing (development)
+pytest==7.4.3
+pytest-mock==3.12.0
