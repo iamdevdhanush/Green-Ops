@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  # GreenOps Server
+  greenops-server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: greenops-server
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=postgresql://greenops:greenops@postgres:5432/greenops
+      - SECRET_KEY=${SECRET_KEY:-change-this-secret-key}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-jwt-key}
+      - DEMO_MODE=${DEMO_MODE:-true}
+      - CARBON_BUDGET_MONTHLY=${CARBON_BUDGET_MONTHLY:-5000}
+      - CO2_FACTOR=${CO2_FACTOR:-0.82}
+      - COST_PER_KWH=${COST_PER_KWH:-8}
+    volumes:
+      - ./server:/app
+      - greenops-logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - greenops-network
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: greenops-postgres
+    environment:
+      - POSTGRES_USER=greenops
+      - POSTGRES_PASSWORD=greenops
+      - POSTGRES_DB=greenops
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - greenops-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U greenops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: greenops-redis
+    volumes:
+      - redis-data:/data
+    networks:
+      - greenops-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Prometheus for metrics (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: greenops-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - greenops-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Grafana for visualization (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: greenops-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/greenops.json
+    networks:
+      - greenops-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+volumes:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+  greenops-logs:
+
+networks:
+  greenops-network:
+    driver: bridge
