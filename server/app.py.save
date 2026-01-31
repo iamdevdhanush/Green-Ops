@@ -675,12 +675,6 @@ def internal_error(error):
     db.session.rollback()
     app.logger.error(f'Server Error: {error}')
     return jsonify({'error': 'Internal server error'}), 500
-
-# ----------------------
-# INITIALIZE DATABASE
-# ----------------------
-with app.app_context():
-    db.create_all()
     
     # Create default admin user if not exists
     if not User.query.filter_by(username='admin').first():
