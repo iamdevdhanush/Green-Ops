@@ -1,6 +1,6 @@
 """
 GreenOps Agent v2.0
-Cross-platform system monitoring agent with advanced power management
+Cross-platform system monitoring agent with MAC-based auto-registration
 """
 
 import time
@@ -10,6 +10,7 @@ import json
 import logging
 import sys
 import os
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -26,13 +27,16 @@ OS = platform.system()
 
 if OS == "Linux":
     from idle_linux import get_idle_minutes_linux
-    from power_linux import sleep_linux, hibernate_linux
+    from power_linux import sleep_linux
 elif OS == "Windows":
     from idle_windows import get_idle_minutes_windows
-    from power_windows import sleep_windows, hibernate_windows
+    from power_windows import sleep_windows
 elif OS == "Darwin":  # macOS
-    from idle_macos import get_idle_minutes_macos
-    from power_macos import sleep_macos
+    try:
+        from idle_macos import get_idle_minutes_macos
+        from power_macos import sleep_macos
+    except:
+        print("Warning: macOS modules not available")
 
 # ----------------------
 # CONFIGURATION
@@ -42,6 +46,11 @@ class Config:
     # Server
     SERVER_URL = os.getenv('GREENOPS_SERVER', 'http://localhost:5000')
     API_KEY = os.getenv('GREENOPS_API_KEY', '')
+    
+    # Organization Info (for PC ID generation)
+    ORGANIZATION = os.getenv('GREENOPS_ORG', 'ORG')
+    DEPARTMENT = os.getenv('GREENOPS_DEPT', 'DEPT')
+    LAB = os.getenv('GREENOPS_LAB', 'LAB')
     
     # Policies
     IDLE_THRESHOLD = 15  # minutes
@@ -77,6 +86,11 @@ class Config:
                 cls.SERVER_URL = config.get('server_url', cls.SERVER_URL)
                 cls.API_KEY = config.get('api_key', cls.API_KEY)
                 
+                # Organization info
+                cls.ORGANIZATION = config.get('organization', cls.ORGANIZATION)
+                cls.DEPARTMENT = config.get('department', cls.DEPARTMENT)
+                cls.LAB = config.get('lab', cls.LAB)
+                
                 policies = config.get('policies', {})
                 cls.IDLE_THRESHOLD = policies.get('idle_threshold_minutes', cls.IDLE_THRESHOLD)
                 cls.SLEEP_THRESHOLD = policies.get('sleep_after_minutes', cls.SLEEP_THRESHOLD)
@@ -105,6 +119,42 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger('GreenOpsAgent')
+
+# ----------------------
+# MAC ADDRESS DETECTION
+# ----------------------
+def get_mac_address():
+    """Get the primary MAC address of this machine"""
+    try:
+        # Method 1: Use uuid.getnode() - most reliable
+        mac_int = uuid.getnode()
+        mac_hex = ':'.join(['{:02x}'.format((mac_int >> elements) & 0xff)
+                           for elements in range(0,2*6,2)][::-1])
+        
+        # Validate it's not a random MAC
+        if mac_int >> 40:  # Check if it's a real MAC
+            return mac_hex.upper()
+        
+        # Method 2: Try to get from network interfaces (if psutil available)
+        if HAS_PSUTIL:
+            addrs = psutil.net_if_addrs()
+            for interface_name, interface_addresses in addrs.items():
+                for address in interface_addresses:
+                    if str(address.family) == 'AddressFamily.AF_LINK' or address.family == 17:
+                        mac = address.address
+                        if mac and mac != '00:00:00:00:00:00':
+                            return mac.upper()
+        
+        # Fallback to uuid method
+        return mac_hex.upper()
+        
+    except Exception as e:
+        logger.error(f"Error getting MAC address: {e}")
+        # Generate a persistent fallback MAC based on hostname
+        hostname = platform.node()
+        fallback_mac = f"02:00:00:{hash(hostname) & 0xFF:02x}:{hash(hostname) >> 8 & 0xFF:02x}:{hash(hostname) >> 16 & 0xFF:02x}"
+        logger.warning(f"Using fallback MAC: {fallback_mac}")
+        return fallback_mac.upper()
 
 # ----------------------
 # IDLE DETECTION
@@ -147,33 +197,12 @@ def sleep_system():
         logger.error(f"Failed to sleep system: {e}")
         return False
 
-def hibernate_system():
-    """Hibernate the system"""
-    if Config.DEMO_MODE:
-        logger.info("[DEMO] Hibernate action prevented - demo mode enabled")
-        return True
-    
-    try:
-        logger.info("Hibernating system...")
-        if OS == "Linux":
-            hibernate_linux()
-        elif OS == "Windows":
-            hibernate_windows()
-        else:
-            logger.warning("Hibernate not supported on this OS, using sleep instead")
-            sleep_system()
-        return True
-    except Exception as e:
-        logger.error(f"Failed to hibernate system: {e}")
-        return False
-
 # ----------------------
 # SYSTEM INFORMATION
 # ----------------------
 def get_system_info():
     """Get detailed system information"""
     info = {
-        'pc_id': platform.node(),
         'hostname': platform.node(),
         'os': OS,
         'os_version': platform.version(),
@@ -196,7 +225,6 @@ def check_unsaved_work():
         return False
     
     try:
-        # Check for common applications that might have unsaved work
         critical_processes = ['word', 'excel', 'powerpoint', 'notepad', 'code', 'vim', 'emacs']
         
         for proc in psutil.process_iter(['name']):
@@ -219,7 +247,11 @@ def check_unsaved_work():
 class ServerClient:
     """Handle communication with GreenOps server"""
     
-    def __init__(self):
+    def __init__(self, mac_address):
+        self.mac_address = mac_address
+        self.pc_id = None
+        self.system_id = None
+        
         self.session = requests.Session()
         self.session.headers.update({
             'Content-Type': 'application/json',
@@ -231,24 +263,82 @@ class ServerClient:
                 'Authorization': f'Bearer {Config.API_KEY}'
             })
     
-    def send_report(self, data, retries=0):
-        """Send activity report to server"""
-        url = f"{Config.SERVER_URL}/api/v1/agent/report"
+    def register(self, retries=0):
+        """Register this system with the server"""
+        url = f"{Config.SERVER_URL}/api/agent/register"
+        
+        system_info = get_system_info()
+        
+        data = {
+            'mac_address': self.mac_address,
+            'hostname': system_info['hostname'],
+            'os': system_info['os'],
+            'organization': Config.ORGANIZATION,
+            'department': Config.DEPARTMENT,
+            'lab': Config.LAB
+        }
         
         try:
             response = self.session.post(url, json=data, timeout=10)
             response.raise_for_status()
             
-            logger.debug(f"Report sent successfully: {data.get('action', 'NONE')}")
-            return response.json()
+            result = response.json()
+            self.pc_id = result.get('pc_id')
+            self.system_id = result.get('system_id')
+            
+            logger.info(f"System registered: PC_ID={self.pc_id}, MAC={self.mac_address}")
+            return True
             
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to send report: {e}")
+            logger.error(f"Registration failed: {e}")
             
             if retries < Config.MAX_RETRIES:
-                logger.info(f"Retrying in {Config.RETRY_DELAY} seconds... (attempt {retries + 1}/{Config.MAX_RETRIES})")
+                logger.info(f"Retrying registration in {Config.RETRY_DELAY}s... (attempt {retries + 1}/{Config.MAX_RETRIES})")
                 time.sleep(Config.RETRY_DELAY)
-                return self.send_report(data, retries + 1)
+                return self.register(retries + 1)
+            
+            return False
+    
+    def send_heartbeat(self, idle_minutes, action, reason, retries=0):
+        """Send heartbeat to server"""
+        url = f"{Config.SERVER_URL}/api/agent/heartbeat"
+        
+        system_info = get_system_info()
+        
+        data = {
+            'mac_address': self.mac_address,
+            'hostname': system_info['hostname'],
+            'os': system_info['os'],
+            'organization': Config.ORGANIZATION,
+            'department': Config.DEPARTMENT,
+            'lab': Config.LAB,
+            'idle_minutes': round(idle_minutes, 2),
+            'action': action,
+            'reason': reason,
+            'threshold': Config.IDLE_THRESHOLD
+        }
+        
+        try:
+            response = self.session.post(url, json=data, timeout=10)
+            response.raise_for_status()
+            
+            result = response.json()
+            
+            # Update PC ID if it changed
+            if result.get('pc_id') and result['pc_id'] != self.pc_id:
+                self.pc_id = result['pc_id']
+                logger.info(f"PC ID updated: {self.pc_id}")
+            
+            logger.debug(f"Heartbeat sent: {action}")
+            return result
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to send heartbeat: {e}")
+            
+            if retries < Config.MAX_RETRIES:
+                logger.info(f"Retrying in {Config.RETRY_DELAY}s... (attempt {retries + 1}/{Config.MAX_RETRIES})")
+                time.sleep(Config.RETRY_DELAY)
+                return self.send_heartbeat(idle_minutes, action, reason, retries + 1)
             
             return None
     
@@ -291,26 +381,21 @@ class PolicyEvaluator:
     
     def evaluate(self, idle_minutes, policy=None):
         """Evaluate what action should be taken"""
-        # Use server policy or fallback to local config
         idle_threshold = policy.get('idle_threshold', Config.IDLE_THRESHOLD) if policy else Config.IDLE_THRESHOLD
         sleep_threshold = policy.get('sleep_threshold', Config.SLEEP_THRESHOLD) if policy else Config.SLEEP_THRESHOLD
         
-        # Check if system is idle beyond sleep threshold
         if idle_minutes >= sleep_threshold:
-            # Check for unsaved work
             if check_unsaved_work():
                 logger.warning("Unsaved work detected, postponing sleep action")
                 return 'NONE', 'Unsaved work detected'
             
             return 'SLEEP', f'Idle for {idle_minutes} minutes (threshold: {sleep_threshold})'
         
-        # Check if system is idle beyond idle threshold (warning zone)
         elif idle_minutes >= idle_threshold:
             if Config.ENABLE_WARNINGS:
                 self._show_warning(idle_minutes, sleep_threshold)
             return 'WARN', f'Approaching sleep threshold ({idle_minutes}/{sleep_threshold} min)'
         
-        # System is active
         else:
             self.warning_start_time = None
             return 'NONE', 'System active'
@@ -319,20 +404,17 @@ class PolicyEvaluator:
         """Show warning to user"""
         now = datetime.now()
         
-        # Only show warning every minute
         if self.last_warning_shown and (now - self.last_warning_shown).seconds < 60:
             return
         
         remaining = sleep_threshold - idle_minutes
         logger.warning(f"⚠️  System will sleep in {remaining} minutes if idle continues")
         
-        # Platform-specific notification
         try:
             if OS == "Linux":
                 os.system(f'notify-send "GreenOps" "System will sleep in {remaining} minutes"')
             elif OS == "Windows":
-                # Windows notification would go here
-                pass
+                pass  # Windows notification implementation
             elif OS == "Darwin":
                 os.system(f'osascript -e \'display notification "System will sleep in {remaining} minutes" with title "GreenOps"\'')
         except:
@@ -362,7 +444,6 @@ class StatsTracker:
         return {
             'total_checks': 0,
             'total_sleep_actions': 0,
-            'total_hibernate_actions': 0,
             'total_idle_minutes': 0,
             'last_reset': datetime.now().isoformat(),
             'uptime_start': datetime.now().isoformat()
@@ -383,8 +464,6 @@ class StatsTracker:
         
         if action == 'SLEEP':
             self.stats['total_sleep_actions'] += 1
-        elif action == 'HIBERNATE':
-            self.stats['total_hibernate_actions'] += 1
         
         self._save_stats()
     
@@ -399,19 +478,29 @@ class GreenOpsAgent:
     """Main agent class"""
     
     def __init__(self):
-        self.client = ServerClient()
+        # Get MAC address
+        self.mac_address = get_mac_address()
+        logger.info(f"MAC Address: {self.mac_address}")
+        
+        self.client = ServerClient(self.mac_address)
         self.evaluator = PolicyEvaluator()
         self.stats = StatsTracker()
-        self.system_info = get_system_info()
         self.policy = None
         self.policy_last_fetched = None
         
         logger.info(f"GreenOps Agent v2.0 starting on {OS}")
-        logger.info(f"System: {self.system_info['pc_id']}")
+        logger.info(f"Organization: {Config.ORGANIZATION}, Department: {Config.DEPARTMENT}, Lab: {Config.LAB}")
         logger.info(f"Demo Mode: {Config.DEMO_MODE}")
     
     def start(self):
         """Start the agent main loop"""
+        # Register with server
+        logger.info("Registering with server...")
+        if not self.client.register():
+            logger.error("Failed to register with server. Will retry in background.")
+        else:
+            logger.info(f"Registered as: {self.client.pc_id}")
+        
         # Check server connectivity
         if not self.client.check_health():
             logger.warning("Server is not reachable. Will retry in background.")
@@ -453,24 +542,14 @@ class GreenOpsAgent:
                     action = 'FAILED'
                     reason = 'Sleep action failed'
             
-            # Prepare report data
-            report_data = {
-                **self.system_info,
-                'idle_minutes': round(idle_minutes, 2),
-                'action': action,
-                'reason': reason,
-                'threshold': self.policy.get('idle_threshold', Config.IDLE_THRESHOLD) if self.policy else Config.IDLE_THRESHOLD,
-                'timestamp': datetime.utcnow().isoformat()
-            }
-            
-            # Send report to server
-            self.client.send_report(report_data)
+            # Send heartbeat to server
+            self.client.send_heartbeat(idle_minutes, action, reason)
             
             # Track statistics
             self.stats.record_check(idle_minutes, action)
             
             # Log status
-            status = f"Idle: {idle_minutes:.1f}min | Action: {action}"
+            status = f"PC: {self.client.pc_id or 'Unregistered'} | Idle: {idle_minutes:.1f}min | Action: {action}"
             if action != 'NONE':
                 logger.info(status)
             else:
@@ -484,6 +563,8 @@ class GreenOpsAgent:
         stats = self.stats.get_summary()
         logger.info("=" * 50)
         logger.info("Agent Statistics:")
+        logger.info(f"  PC ID: {self.client.pc_id or 'Not registered'}")
+        logger.info(f"  MAC Address: {self.mac_address}")
         logger.info(f"  Total Checks: {stats['total_checks']}")
         logger.info(f"  Sleep Actions: {stats['total_sleep_actions']}")
         logger.info(f"  Total Idle Time: {stats['total_idle_minutes']:.1f} minutes")
