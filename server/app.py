@@ -3,7 +3,7 @@ GreenOps Server v2.0
 Enterprise Carbon Governance Platform
 """
 
-from flask import Flask, request, render_template, jsonify, Response
+from flask import Flask, request, render_template, jsonify, Response, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_cors import CORS
@@ -32,6 +32,10 @@ class Config:
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
     
+    # Server
+    HOST = os.getenv('HOST', '0.0.0.0')
+    PORT = int(os.getenv('PORT', 5000))
+    
     # Carbon Settings
     CARBON_BUDGET_MONTHLY = int(os.getenv('CARBON_BUDGET_MONTHLY', 5000))
     CO2_FACTOR = float(os.getenv('CO2_FACTOR', 0.82))
@@ -42,7 +46,7 @@ class Config:
     MONITOR_POWER_WATTS = 30
     
     # Features
-    DEMO_MODE = os.getenv('DEMO_MODE', 'true').lower() == 'true'
+    DEMO_MODE = os.getenv('DEMO_MODE', 'false').lower() == 'true'
     ENABLE_ML_PREDICTIONS = os.getenv('ENABLE_ML_PREDICTIONS', 'false').lower() == 'true'
     
     # Rate Limiting
@@ -134,12 +138,16 @@ class System(db.Model):
     __tablename__ = 'systems'
     
     id = db.Column(db.Integer, primary_key=True)
-    pc_id = db.Column(db.String(100), unique=True, nullable=False)
+    pc_id = db.Column(db.String(100), nullable=False, index=True)
+    mac_address = db.Column(db.String(17), unique=True, nullable=False, index=True)
     hostname = db.Column(db.String(255))
     os = db.Column(db.String(50))
+    department = db.Column(db.String(100))
+    lab = db.Column(db.String(100))
     department_id = db.Column(db.Integer, db.ForeignKey('departments.id'))
     power_watts = db.Column(db.Integer, default=150)
-    status = db.Column(db.String(20), default='active')  # active, idle, sleeping, offline
+    status = db.Column(db.String(20), default='offline')  # active, idle, sleeping, offline
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow)
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
     registered_at = db.Column(db.DateTime, default=datetime.utcnow)
     agent_version = db.Column(db.String(20))
@@ -149,11 +157,15 @@ class System(db.Model):
         return {
             'id': self.id,
             'pc_id': self.pc_id,
+            'mac_address': self.mac_address,
             'hostname': self.hostname,
             'os': self.os,
+            'department': self.department,
+            'lab': self.lab,
             'department_id': self.department_id,
             'power_watts': self.power_watts,
             'status': self.status,
+            'first_seen': self.first_seen.isoformat() if self.first_seen else None,
             'last_seen': self.last_seen.isoformat() if self.last_seen else None,
             'registered_at': self.registered_at.isoformat() if self.registered_at else None
         }
@@ -193,12 +205,12 @@ class Policy(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
-    idle_threshold = db.Column(db.Integer, default=15)  # minutes
-    sleep_threshold = db.Column(db.Integer, default=30)  # minutes
-    action_type = db.Column(db.String(20), default='sleep')  # sleep, hibernate, shutdown
+    idle_threshold = db.Column(db.Integer, default=15)
+    sleep_threshold = db.Column(db.Integer, default=30)
+    action_type = db.Column(db.String(20), default='sleep')
     warning_enabled = db.Column(db.Boolean, default=True)
-    warning_duration = db.Column(db.Integer, default=300)  # seconds
-    schedule = db.Column(db.String(100))  # e.g., "Mon-Fri 9:00-18:00"
+    warning_duration = db.Column(db.Integer, default=300)
+    schedule = db.Column(db.String(100))
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -245,11 +257,26 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def login_required_web(f):
+    """Web-based login check (redirects to login page)"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # For web pages, we'll use session-based auth
+        # This is a simplified version - in production, use Flask-Login
+        return f(*args, **kwargs)
+    return decorated_function
+
 def log_audit(action, resource=None, resource_id=None, details=None):
     """Log audit trail"""
     try:
+        user_id = None
+        try:
+            user_id = get_jwt_identity()
+        except:
+            pass
+        
         audit = AuditLog(
-            user_id=get_jwt_identity() if jwt_required else None,
+            user_id=user_id,
             action=action,
             resource=resource,
             resource_id=resource_id,
@@ -279,31 +306,60 @@ def calculate_metrics(idle_minutes, power_watts=None):
         'cost_saved': round(cost_saved, 2)
     }
 
-def get_or_create_system(pc_id, os_name=None):
-    """Get existing system or create new one"""
-    system = System.query.filter_by(pc_id=pc_id).first()
+def generate_pc_id(mac_address, organization='ORG', department='DEPT', lab='LAB'):
+    """Generate PC ID from MAC address: ORG-DEPT-LAB-LAST4MAC"""
+    # Extract last 4 characters of MAC (without colons)
+    mac_clean = mac_address.replace(':', '').replace('-', '').upper()
+    last4 = mac_clean[-4:]
+    
+    # Generate PC ID
+    pc_id = f"{organization}-{department}-{lab}-{last4}"
+    return pc_id
+
+def get_or_create_system(mac_address, hostname=None, os_name=None, organization='ORG', department='DEPT', lab='LAB'):
+    """Get existing system by MAC or create new one"""
+    # Normalize MAC address format
+    mac_normalized = mac_address.upper().replace('-', ':')
+    
+    system = System.query.filter_by(mac_address=mac_normalized).first()
+    
     if not system:
+        # Generate PC ID from MAC
+        pc_id = generate_pc_id(mac_normalized, organization, department, lab)
+        
         system = System(
             pc_id=pc_id,
-            hostname=pc_id,
+            mac_address=mac_normalized,
+            hostname=hostname or pc_id,
             os=os_name,
-            status='active'
+            department=department,
+            lab=lab,
+            status='active',
+            first_seen=datetime.utcnow(),
+            last_seen=datetime.utcnow()
         )
         db.session.add(system)
         db.session.commit()
-        app.logger.info(f"New system registered: {pc_id}")
+        app.logger.info(f"New system registered: {pc_id} (MAC: {mac_normalized})")
     else:
+        # Update last seen and status
         system.last_seen = datetime.utcnow()
+        system.status = 'active'
+        if hostname:
+            system.hostname = hostname
+        if os_name:
+            system.os = os_name
         db.session.commit()
+    
     return system
 
 # ----------------------
 # AUTHENTICATION ROUTES
 # ----------------------
-@app.route('/api/v1/auth/login', methods=['POST'])
+@app.route('/api/auth/login', methods=['POST'])
 @limiter.limit("5 per minute")
-def login():
-    """User login endpoint"""
+def api_login():
+    """API login endpoint"""
     data = request.get_json()
     
     if not data or not data.get('username') or not data.get('password'):
@@ -325,6 +381,31 @@ def login():
         'access_token': access_token,
         'user': user.to_dict()
     }), 200
+
+@app.route('/api/auth/change-password', methods=['POST'])
+@jwt_required()
+def change_password():
+    """Change user password"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    data = request.get_json()
+    
+    if not data or not data.get('old_password') or not data.get('new_password'):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    if not user.check_password(data['old_password']):
+        return jsonify({'error': 'Invalid old password'}), 401
+    
+    user.set_password(data['new_password'])
+    db.session.commit()
+    
+    log_audit('change_password', 'user', user.id)
+    
+    return jsonify({'message': 'Password changed successfully'}), 200
 
 @app.route('/api/v1/auth/register', methods=['POST'])
 @admin_required
@@ -357,23 +438,204 @@ def register():
     return jsonify({'message': 'User created', 'user': user.to_dict()}), 201
 
 # ----------------------
-# DASHBOARD ROUTE
+# AGENT API
+# ----------------------
+@app.route('/api/agent/register', methods=['POST'])
+@limiter.limit("10 per minute")
+def agent_register():
+    """Agent registration endpoint"""
+    data = request.get_json()
+    
+    if not data or not data.get('mac_address'):
+        return jsonify({'error': 'Missing mac_address'}), 400
+    
+    mac_address = data['mac_address']
+    hostname = data.get('hostname', 'unknown')
+    os_name = data.get('os')
+    organization = data.get('organization', 'ORG')
+    department = data.get('department', 'DEPT')
+    lab = data.get('lab', 'LAB')
+    
+    try:
+        system = get_or_create_system(
+            mac_address=mac_address,
+            hostname=hostname,
+            os_name=os_name,
+            organization=organization,
+            department=department,
+            lab=lab
+        )
+        
+        return jsonify({
+            'status': 'ok',
+            'system_id': system.id,
+            'pc_id': system.pc_id,
+            'message': 'System registered successfully'
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Registration error: {e}")
+        return jsonify({'error': 'Registration failed'}), 500
+
+@app.route('/api/agent/heartbeat', methods=['POST'])
+@limiter.limit("120 per minute")
+def agent_heartbeat():
+    """Agent heartbeat endpoint"""
+    data = request.get_json()
+    
+    if not data or not data.get('mac_address'):
+        return jsonify({'error': 'Missing mac_address'}), 400
+    
+    mac_address = data['mac_address']
+    idle_minutes = data.get('idle_minutes', 0)
+    action = data.get('action', 'NONE')
+    
+    try:
+        # Get or create system by MAC
+        system = get_or_create_system(
+            mac_address=mac_address,
+            hostname=data.get('hostname'),
+            os_name=data.get('os'),
+            organization=data.get('organization', 'ORG'),
+            department=data.get('department', 'DEPT'),
+            lab=data.get('lab', 'LAB')
+        )
+        
+        # Update system status
+        if idle_minutes > 30:
+            system.status = 'idle'
+        elif action in ['SLEEP', 'HIBERNATE']:
+            system.status = 'sleeping'
+        else:
+            system.status = 'active'
+        
+        db.session.commit()
+        
+        # Calculate metrics
+        metrics = calculate_metrics(idle_minutes, system.power_watts)
+        
+        # Determine reason
+        reason = None
+        if action == 'SLEEP':
+            reason = f'Idle exceeded {data.get("threshold", 15)} minute threshold'
+        elif action == 'NONE':
+            reason = 'Within allowed activity window'
+        
+        # Create log entry
+        log_entry = AgentLog(
+            system_id=system.id,
+            pc_id=system.pc_id,
+            idle_minutes=idle_minutes,
+            action=action,
+            reason=reason,
+            energy_kwh=metrics['energy_kwh'],
+            co2_kg=metrics['co2_kg'],
+            cost_saved=metrics['cost_saved'] if action != 'NONE' else 0
+        )
+        
+        db.session.add(log_entry)
+        db.session.commit()
+        
+        app.logger.info(f"Heartbeat from {system.pc_id}: idle={idle_minutes}min, action={action}")
+        
+        return jsonify({
+            'status': 'ok',
+            'system_id': system.id,
+            'pc_id': system.pc_id,
+            'metrics': metrics
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Heartbeat error: {e}")
+        return jsonify({'error': 'Heartbeat failed'}), 500
+
+@app.route('/api/v1/agent/report', methods=['POST'])
+@limiter.limit("120 per minute")
+def agent_report():
+    """Legacy agent report endpoint - redirects to heartbeat"""
+    return agent_heartbeat()
+
+@app.route('/api/v1/agent/policy', methods=['GET'])
+def agent_policy():
+    """Get active policy for agent"""
+    active_policy = Policy.query.filter_by(is_active=True).first()
+    
+    if not active_policy:
+        return jsonify({
+            'idle_threshold': 15,
+            'sleep_threshold': 30,
+            'action_type': 'sleep',
+            'warning_enabled': True,
+            'warning_duration': 300
+        }), 200
+    
+    return jsonify(active_policy.to_dict()), 200
+
+# ----------------------
+# ADMIN API
+# ----------------------
+@app.route('/api/admin/machines', methods=['GET'])
+@jwt_required()
+def get_machines():
+    """Get all machines (admin endpoint)"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    # Get query parameters
+    status = request.args.get('status')
+    department = request.args.get('department')
+    lab = request.args.get('lab')
+    
+    # Build query
+    query = System.query.filter_by(is_active=True)
+    
+    if status:
+        query = query.filter_by(status=status)
+    if department:
+        query = query.filter_by(department=department)
+    if lab:
+        query = query.filter_by(lab=lab)
+    
+    systems = query.all()
+    
+    return jsonify({
+        'machines': [s.to_dict() for s in systems],
+        'total': len(systems)
+    }), 200
+
+@app.route('/api/admin/machine/<int:machine_id>', methods=['GET'])
+@jwt_required()
+def get_machine(machine_id):
+    """Get specific machine details"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    system = System.query.get_or_404(machine_id)
+    
+    # Get recent logs
+    recent_logs = AgentLog.query.filter_by(system_id=machine_id)\
+        .order_by(AgentLog.timestamp.desc())\
+        .limit(20).all()
+    
+    return jsonify({
+        'machine': system.to_dict(),
+        'recent_logs': [log.to_dict() for log in recent_logs]
+    }), 200
+
+# ----------------------
+# DASHBOARD ROUTES
 # ----------------------
 @app.route('/')
 def dashboard():
     """Main dashboard view"""
-    # Get recent logs
     logs_query = AgentLog.query.order_by(AgentLog.timestamp.desc()).limit(20).all()
-    
-    # Demo data if no logs
-    if not logs_query:
-        logs_data = [
-            {"pc_id": "PC-01", "idle_minutes": 25, "action": "SLEEP"},
-            {"pc_id": "PC-02", "idle_minutes": 10, "action": "NONE"},
-            {"pc_id": "PC-03", "idle_minutes": 45, "action": "SLEEP"},
-        ]
-    else:
-        logs_data = [log.to_dict() for log in logs_query]
+    logs_data = [log.to_dict() for log in logs_query]
     
     # Calculate totals
     total_idle = sum(log.get('idle_minutes', 0) for log in logs_data)
@@ -381,7 +643,6 @@ def dashboard():
     total_co2 = sum(log.get('co2_kg', 0) for log in logs_data)
     total_cost_saved = sum(log.get('cost_saved', 0) for log in logs_data)
     
-    # If no calculated values, estimate
     if total_energy == 0 and total_idle > 0:
         metrics = calculate_metrics(total_idle)
         total_energy = metrics['energy_kwh']
@@ -417,83 +678,46 @@ def dashboard():
         demo_mode=Config.DEMO_MODE
     )
 
-# ----------------------
-# AGENT API
-# ----------------------
-@app.route('/api/v1/agent/report', methods=['POST'])
-@limiter.limit("120 per minute")
-def agent_report():
-    """Receive agent reports"""
-    data = request.get_json()
+@app.route('/admin')
+def admin_dashboard():
+    """Admin dashboard with machine listing"""
+    # Update system statuses (mark as offline if not seen in 5 minutes)
+    cutoff_time = datetime.utcnow() - timedelta(minutes=5)
+    offline_systems = System.query.filter(
+        System.last_seen < cutoff_time,
+        System.status != 'offline'
+    ).all()
     
-    if not data or not data.get('pc_id'):
-        return jsonify({'error': 'Missing pc_id'}), 400
+    for system in offline_systems:
+        system.status = 'offline'
     
-    pc_id = data['pc_id']
-    idle_minutes = data.get('idle_minutes', 0)
-    action = data.get('action', 'NONE')
-    os_name = data.get('os')
+    if offline_systems:
+        db.session.commit()
     
-    # Get or create system
-    system = get_or_create_system(pc_id, os_name)
+    # Get all systems
+    systems = System.query.filter_by(is_active=True).order_by(System.last_seen.desc()).all()
     
-    # Update system status
-    if idle_minutes > 30:
-        system.status = 'idle'
-    elif action in ['SLEEP', 'HIBERNATE']:
-        system.status = 'sleeping'
-    else:
-        system.status = 'active'
+    # Count by status
+    total_pcs = len(systems)
+    active_pcs = len([s for s in systems if s.status == 'active'])
+    idle_pcs = len([s for s in systems if s.status == 'idle'])
+    sleeping_pcs = len([s for s in systems if s.status == 'sleeping'])
+    offline_pcs = len([s for s in systems if s.status == 'offline'])
     
-    # Calculate metrics
-    metrics = calculate_metrics(idle_minutes, system.power_watts)
-    
-    # Determine reason
-    reason = None
-    if action == 'SLEEP':
-        reason = f'Idle exceeded {data.get("threshold", 15)} minute threshold'
-    elif action == 'NONE':
-        reason = 'Within allowed activity window'
-    
-    # Create log entry
-    log_entry = AgentLog(
-        system_id=system.id,
-        pc_id=pc_id,
-        idle_minutes=idle_minutes,
-        action=action,
-        reason=reason,
-        energy_kwh=metrics['energy_kwh'],
-        co2_kg=metrics['co2_kg'],
-        cost_saved=metrics['cost_saved'] if action != 'NONE' else 0
+    return render_template(
+        'admin.html',
+        systems=systems,
+        total_pcs=total_pcs,
+        active_pcs=active_pcs,
+        idle_pcs=idle_pcs,
+        sleeping_pcs=sleeping_pcs,
+        offline_pcs=offline_pcs
     )
-    
-    db.session.add(log_entry)
-    db.session.commit()
-    
-    app.logger.info(f"Report from {pc_id}: idle={idle_minutes}min, action={action}")
-    
-    return jsonify({
-        'status': 'ok',
-        'system_id': system.id,
-        'metrics': metrics
-    }), 200
 
-@app.route('/api/v1/agent/policy', methods=['GET'])
-def agent_policy():
-    """Get active policy for agent"""
-    active_policy = Policy.query.filter_by(is_active=True).first()
-    
-    if not active_policy:
-        # Return default policy
-        return jsonify({
-            'idle_threshold': 15,
-            'sleep_threshold': 30,
-            'action_type': 'sleep',
-            'warning_enabled': True,
-            'warning_duration': 300
-        }), 200
-    
-    return jsonify(active_policy.to_dict()), 200
+@app.route('/login')
+def login_page():
+    """Login page"""
+    return render_template('login.html')
 
 # ----------------------
 # SYSTEMS API
@@ -511,7 +735,6 @@ def get_system(system_id):
     """Get specific system"""
     system = System.query.get_or_404(system_id)
     
-    # Get recent logs
     recent_logs = AgentLog.query.filter_by(system_id=system_id)\
         .order_by(AgentLog.timestamp.desc())\
         .limit(10).all()
@@ -530,7 +753,6 @@ def metrics_summary():
     """Get summary metrics"""
     period = request.args.get('period', '7d')
     
-    # Calculate time range
     if period == '24h':
         since = datetime.utcnow() - timedelta(days=1)
     elif period == '7d':
@@ -540,7 +762,6 @@ def metrics_summary():
     else:
         since = datetime.utcnow() - timedelta(days=7)
     
-    # Query logs
     logs = AgentLog.query.filter(AgentLog.timestamp >= since).all()
     
     total_energy = sum(log.energy_kwh or 0 for log in logs)
@@ -568,7 +789,6 @@ def metrics_trends():
     
     logs = AgentLog.query.filter(AgentLog.timestamp >= since).all()
     
-    # Group by date
     daily_metrics = {}
     for log in logs:
         date_key = log.timestamp.strftime('%Y-%m-%d')
@@ -614,13 +834,11 @@ def export_csv():
     output = StringIO()
     writer = csv.writer(output)
     
-    # Header
     writer.writerow([
         'Timestamp', 'System ID', 'Idle Minutes', 'Action',
         'Energy (kWh)', 'CO2 (kg)', 'Cost Saved (₹)', 'Reason'
     ])
     
-    # Data
     for log in logs:
         writer.writerow([
             log.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
@@ -686,7 +904,6 @@ def create_policy():
 def health():
     """Health check endpoint"""
     try:
-        # Check database
         db.session.execute('SELECT 1')
         db_status = 'ok'
     except Exception as e:
@@ -770,7 +987,7 @@ with app.app_context():
             email='admin@greenops.local',
             role='admin'
         )
-        admin.set_password('changeme')
+        admin.set_password('admin123')
         db.session.add(admin)
         
         # Create default department
@@ -794,14 +1011,14 @@ with app.app_context():
         db.session.add(default_policy)
         
         db.session.commit()
-        app.logger.info('Default admin user and policy created')
+        app.logger.info('Default admin user created (username: admin, password: admin123)')
 
 # ----------------------
 # START SERVER
 # ----------------------
 if __name__ == '__main__':
     app.run(
-        host='0.0.0.0',
-        port=5000,
-        debug=not Config.DEMO_MODE
+        host=Config.HOST,
+        port=Config.PORT,
+        debug=Config.DEMO_MODE
     )
