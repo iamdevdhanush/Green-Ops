@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - GreenOps</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">GreenOps</div>
+                <ul class="nav-links">
+                    <li><span id="username-display" style="color: var(--gray-600);"></span></li>
+                    <li><a href="#" id="logout-btn">Logout</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard">
+        <div class="container">
+            <div class="dashboard-header">
+                <h1 class="dashboard-title">Dashboard</h1>
+                <button id="refresh-btn" class="btn btn-secondary">Refresh</button>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Machines</div>
+                    <div class="stat-value" id="total-machines">0</div>
+                </div>
+                <div class="stat-card active">
+                    <div class="stat-label">Active</div>
+                    <div class="stat-value" id="active-machines">0</div>
+                </div>
+                <div class="stat-card idle">
+                    <div class="stat-label">Idle</div>
+                    <div class="stat-value" id="idle-machines">0</div>
+                </div>
+                <div class="stat-card offline">
+                    <div class="stat-label">Offline</div>
+                    <div class="stat-value" id="offline-machines">0</div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <div class="table-header">
+                    <h2 class="table-title">Registered Machines</h2>
+                </div>
+                <div id="table-content">
+                    <div class="loading">Loading machines...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        
+        if (!token) {
+            window.location.href = '/login';
+        }
+        
+        document.getElementById('username-display').textContent = user.username || 'Admin';
+        
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+        });
+        
+        async function fetchWithAuth(url) {
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (response.status === 401 || response.status === 403) {
+                localStorage.removeItem('token');
+                window.location.href = '/login';
+                throw new Error('Unauthorized');
+            }
+            
+            return response;
+        }
+        
+        async function loadStats() {
+            try {
+                const response = await fetchWithAuth('/api/admin/stats');
+                const data = await response.json();
+                
+                document.getElementById('total-machines').textContent = data.total_machines;
+                document.getElementById('active-machines').textContent = data.active_machines;
+                document.getElementById('idle-machines').textContent = data.idle_machines;
+                document.getElementById('offline-machines').textContent = data.offline_machines;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+        
+        async function loadMachines() {
+            try {
+                const response = await fetchWithAuth('/api/admin/machines');
+                const data = await response.json();
+                
+                const tableContent = document.getElementById('table-content');
+                
+                if (data.machines.length === 0) {
+                    tableContent.innerHTML = '<div class="loading">No machines registered yet.</div>';
+                    return;
+                }
+                
+                const html = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>PC ID</th>
+                                <th>MAC Address</th>
+                                <th>Department</th>
+                                <th>Lab</th>
+                                <th>Hostname</th>
+                                <th>OS</th>
+                                <th>Status</th>
+                                <th>Last Seen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.machines.map(machine => `
+                                <tr>
+                                    <td><strong>${machine.pc_id}</strong></td>
+                                    <td>${machine.mac_address}</td>
+                                    <td>${machine.department}</td>
+                                    <td>${machine.lab}</td>
+                                    <td>${machine.hostname || 'N/A'}</td>
+                                    <td>${machine.os || 'N/A'}</td>
+                                    <td>
+                                        <span class="status-badge status-${machine.status.toLowerCase()}">
+                                            ${machine.status}
+                                        </span>
+                                    </td>
+                                    <td>${formatDate(machine.last_seen)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                
+                tableContent.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading machines:', error);
+                document.getElementById('table-content').innerHTML = 
+                    '<div class="loading">Error loading machines. Please refresh.</div>';
+            }
+        }
+        
+        function formatDate(dateString) {
+            if (!dateString) return 'Never';
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins} min ago`;
+            if (diffMins < 1440) return `${Math.floor(diffMins / 60)} hours ago`;
+            
+            return date.toLocaleString();
+        }
+        
+        async function refreshData() {
+            await loadStats();
+            await loadMachines();
+        }
+        
+        document.getElementById('refresh-btn').addEventListener('click', refreshData);
+        
+        // Initial load
+        refreshData();
+        
+        // Auto-refresh every 30 seconds
+        setInterval(refreshData, 30000);
+    </script>
+</body>
+</html>
