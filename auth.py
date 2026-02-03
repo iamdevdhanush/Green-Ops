@@ -37,6 +37,6 @@ def get_current_user():
     try:
         verify_jwt_in_request()
         current_user_id = get_jwt_identity()
-        return User.query.get(current_user_id)
+        return User.query.get(int(current_user_id))
     except:
         return None
