@@ -15,7 +15,7 @@ def admin_required():
                 if not current_user_id:
                     return jsonify({'error': 'Invalid token - no identity'}), 401
                 
-                user = User.query.get(current_user_id)
+                user = User.query.get(int(current_user_id))
                 
                 if not user:
                     return jsonify({'error': 'User not found'}), 401
