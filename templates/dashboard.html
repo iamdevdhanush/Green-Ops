@@ -5,12 +5,73 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - GreenOps</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .power-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .btn-power {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.875rem;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-sleep {
+            background: #3b82f6;
+            color: white;
+        }
+        .btn-sleep:hover {
+            background: #2563eb;
+        }
+        .btn-shutdown {
+            background: #ef4444;
+            color: white;
+        }
+        .btn-shutdown:hover {
+            background: #dc2626;
+        }
+        .btn-power:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .bulk-actions {
+            margin-bottom: 1rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+    </style>
 </head>
 <body>
     <div class="header">
         <div class="container">
             <div class="header-content">
-                <div class="logo">GreenOps</div>
+                <div class="logo">GreenOps ⚡</div>
                 <ul class="nav-links">
                     <li><span id="username-display" style="color: var(--gray-600);"></span></li>
                     <li><a href="#" id="logout-btn">Logout</a></li>
@@ -49,6 +110,14 @@
                 <div class="table-header">
                     <h2 class="table-title">Registered Machines</h2>
                 </div>
+                <div style="padding: 1.5rem;">
+                    <div class="bulk-actions">
+                        <button id="sleep-all-idle-btn" class="btn btn-primary">
+                            ⚡ Sleep All Idle PCs
+                        </button>
+                        <span id="bulk-action-status" style="color: var(--success);"></span>
+                    </div>
+                </div>
                 <div id="table-content">
                     <div class="loading">Loading machines...</div>
                 </div>
@@ -56,21 +125,28 @@
         </div>
     </div>
 
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="modal-title">Confirm Action</h2>
+            <p id="modal-message"></p>
+            <div class="modal-buttons">
+                <button id="modal-confirm" class="btn btn-primary">Confirm</button>
+                <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Get token and user from localStorage
         const token = localStorage.getItem('token');
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         
-        // Redirect to login if no token
         if (!token) {
-            console.log('No token found, redirecting to login');
             window.location.href = '/login';
         }
         
-        // Display username
         document.getElementById('username-display').textContent = user.username || 'Admin';
         
-        // Logout handler
         document.getElementById('logout-btn').addEventListener('click', (e) => {
             e.preventDefault();
             localStorage.removeItem('token');
@@ -78,8 +154,7 @@
             window.location.href = '/login';
         });
         
-        // Fetch with authentication
-        async function fetchWithAuth(url) {
+        async function fetchWithAuth(url, options = {}) {
             const token = localStorage.getItem('token');
             
             if (!token) {
@@ -87,16 +162,16 @@
                 throw new Error('No token');
             }
             
-            const response = await fetch(url, {
-                method: 'GET',
+            const defaultOptions = {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
-            });
+            };
+            
+            const response = await fetch(url, { ...defaultOptions, ...options });
             
             if (response.status === 401 || response.status === 403) {
-                console.error('Auth failed, clearing storage and redirecting');
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
                 window.location.href = '/login';
@@ -106,7 +181,6 @@
             return response;
         }
         
-        // Load statistics
         async function loadStats() {
             try {
                 const response = await fetchWithAuth('/api/admin/stats');
@@ -121,7 +195,6 @@
             }
         }
         
-        // Load machines
         async function loadMachines() {
             try {
                 const response = await fetchWithAuth('/api/admin/machines');
@@ -130,7 +203,7 @@
                 const tableContent = document.getElementById('table-content');
                 
                 if (!data.machines || data.machines.length === 0) {
-                    tableContent.innerHTML = '<div class="loading">No machines registered yet. Start an agent to see it here.</div>';
+                    tableContent.innerHTML = '<div class="loading">No machines registered yet.</div>';
                     return;
                 }
                 
@@ -142,10 +215,9 @@
                                 <th>MAC Address</th>
                                 <th>Department</th>
                                 <th>Lab</th>
-                                <th>Hostname</th>
-                                <th>OS</th>
                                 <th>Status</th>
                                 <th>Last Seen</th>
+                                <th>Power Control</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -155,14 +227,30 @@
                                     <td>${machine.mac_address}</td>
                                     <td>${machine.department}</td>
                                     <td>${machine.lab}</td>
-                                    <td>${machine.hostname || 'N/A'}</td>
-                                    <td>${machine.os || 'N/A'}</td>
                                     <td>
                                         <span class="status-badge status-${machine.status.toLowerCase()}">
                                             ${machine.status}
                                         </span>
                                     </td>
                                     <td>${formatDate(machine.last_seen)}</td>
+                                    <td>
+                                        <div class="power-controls">
+                                            <button 
+                                                class="btn-power btn-sleep" 
+                                                onclick="sleepMachine(${machine.id}, '${machine.pc_id}')"
+                                                ${machine.status === 'OFFLINE' ? 'disabled' : ''}
+                                            >
+                                                💤 Sleep
+                                            </button>
+                                            <button 
+                                                class="btn-power btn-shutdown" 
+                                                onclick="shutdownMachine(${machine.id}, '${machine.pc_id}')"
+                                                ${machine.status === 'OFFLINE' ? 'disabled' : ''}
+                                            >
+                                                🔴 Shutdown
+                                            </button>
+                                        </div>
+                                    </td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -172,12 +260,9 @@
                 tableContent.innerHTML = html;
             } catch (error) {
                 console.error('Error loading machines:', error);
-                document.getElementById('table-content').innerHTML = 
-                    '<div class="loading">Error loading machines.</div>';
             }
         }
         
-        // Format date
         function formatDate(dateString) {
             if (!dateString) return 'Never';
             const date = new Date(dateString);
@@ -192,19 +277,100 @@
             return date.toLocaleString();
         }
         
-        // Refresh data
+        function showModal(title, message, onConfirm) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-message').textContent = message;
+            document.getElementById('confirm-modal').style.display = 'block';
+            
+            document.getElementById('modal-confirm').onclick = () => {
+                document.getElementById('confirm-modal').style.display = 'none';
+                onConfirm();
+            };
+            
+            document.getElementById('modal-cancel').onclick = () => {
+                document.getElementById('confirm-modal').style.display = 'none';
+            };
+        }
+        
+        async function sleepMachine(machineId, pcId) {
+            showModal(
+                'Confirm Sleep',
+                `Are you sure you want to put ${pcId} to sleep?`,
+                async () => {
+                    try {
+                        const response = await fetchWithAuth(`/api/power/sleep/${machineId}`, {
+                            method: 'POST'
+                        });
+                        
+                        const data = await response.json();
+                        alert(data.message);
+                        
+                        if (response.ok) {
+                            setTimeout(refreshData, 2000);
+                        }
+                    } catch (error) {
+                        alert('Failed to send sleep command');
+                    }
+                }
+            );
+        }
+        
+        async function shutdownMachine(machineId, pcId) {
+            showModal(
+                'Confirm Shutdown',
+                `Are you sure you want to shutdown ${pcId}? This will turn off the PC completely.`,
+                async () => {
+                    try {
+                        const response = await fetchWithAuth(`/api/power/shutdown/${machineId}`, {
+                            method: 'POST'
+                        });
+                        
+                        const data = await response.json();
+                        alert(data.message);
+                        
+                        if (response.ok) {
+                            setTimeout(refreshData, 2000);
+                        }
+                    } catch (error) {
+                        alert('Failed to send shutdown command');
+                    }
+                }
+            );
+        }
+        
+        document.getElementById('sleep-all-idle-btn').addEventListener('click', async () => {
+            showModal(
+                'Confirm Bulk Sleep',
+                'This will put ALL idle PCs to sleep. Continue?',
+                async () => {
+                    try {
+                        const response = await fetchWithAuth('/api/power/sleep-all-idle', {
+                            method: 'POST'
+                        });
+                        
+                        const data = await response.json();
+                        
+                        document.getElementById('bulk-action-status').textContent = data.message;
+                        setTimeout(() => {
+                            document.getElementById('bulk-action-status').textContent = '';
+                        }, 5000);
+                        
+                        setTimeout(refreshData, 2000);
+                    } catch (error) {
+                        alert('Failed to send bulk sleep command');
+                    }
+                }
+            );
+        });
+        
         async function refreshData() {
             await loadStats();
             await loadMachines();
         }
         
-        // Refresh button
         document.getElementById('refresh-btn').addEventListener('click', refreshData);
         
-        // Initial load
         refreshData();
-        
-        // Auto-refresh every 30 seconds
         setInterval(refreshData, 30000);
     </script>
 </body>
