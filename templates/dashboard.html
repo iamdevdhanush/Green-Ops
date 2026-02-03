@@ -57,15 +57,20 @@
     </div>
 
     <script>
+        // Get token and user from localStorage
         const token = localStorage.getItem('token');
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         
+        // Redirect to login if no token
         if (!token) {
+            console.log('No token found, redirecting to login');
             window.location.href = '/login';
         }
         
+        // Display username
         document.getElementById('username-display').textContent = user.username || 'Admin';
         
+        // Logout handler
         document.getElementById('logout-btn').addEventListener('click', (e) => {
             e.preventDefault();
             localStorage.removeItem('token');
@@ -73,46 +78,39 @@
             window.location.href = '/login';
         });
         
+        // Fetch with authentication
         async function fetchWithAuth(url) {
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-        console.error('No token found');
-        window.location.href = '/login';
-        throw new Error('No token');
-    }
-    
-    console.log('Fetching:', url);
-    
-    const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                window.location.href = '/login';
+                throw new Error('No token');
+            }
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.status === 401 || response.status === 403) {
+                console.error('Auth failed, clearing storage and redirecting');
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = '/login';
+                throw new Error('Unauthorized');
+            }
+            
+            return response;
         }
-    });
-    
-    console.log('Response status:', response.status);
-    
-    if (response.status === 401 || response.status === 403) {
-        console.error('Authentication failed, redirecting to login');
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-        throw new Error('Unauthorized');
-    }
-    
-    return response;
-}
-    
         
+        // Load statistics
         async function loadStats() {
             try {
-                console.log('Fetching stats...');
                 const response = await fetchWithAuth('/api/admin/stats');
                 const data = await response.json();
-                
-                console.log('Stats received:', data);
                 
                 document.getElementById('total-machines').textContent = data.total_machines || 0;
                 document.getElementById('active-machines').textContent = data.active_machines || 0;
@@ -120,21 +118,14 @@
                 document.getElementById('offline-machines').textContent = data.offline_machines || 0;
             } catch (error) {
                 console.error('Error loading stats:', error);
-                // Show zeros if error
-                document.getElementById('total-machines').textContent = '?';
-                document.getElementById('active-machines').textContent = '?';
-                document.getElementById('idle-machines').textContent = '?';
-                document.getElementById('offline-machines').textContent = '?';
             }
         }
         
+        // Load machines
         async function loadMachines() {
             try {
-                console.log('Fetching machines...');
                 const response = await fetchWithAuth('/api/admin/machines');
                 const data = await response.json();
-                
-                console.log('Machines received:', data.machines?.length || 0, 'machines');
                 
                 const tableContent = document.getElementById('table-content');
                 
@@ -182,10 +173,11 @@
             } catch (error) {
                 console.error('Error loading machines:', error);
                 document.getElementById('table-content').innerHTML = 
-                    '<div class="loading">Error loading machines. Check console for details. <button onclick="location.reload()" class="btn btn-primary" style="margin-top: 1rem;">Reload Page</button></div>';
+                    '<div class="loading">Error loading machines.</div>';
             }
         }
         
+        // Format date
         function formatDate(dateString) {
             if (!dateString) return 'Never';
             const date = new Date(dateString);
@@ -200,29 +192,20 @@
             return date.toLocaleString();
         }
         
+        // Refresh data
         async function refreshData() {
-            console.log('Refreshing dashboard data...');
-            try {
-                await loadStats();
-                await loadMachines();
-                console.log('Dashboard refreshed successfully');
-            } catch (error) {
-                console.error('Error refreshing dashboard:', error);
-            }
+            await loadStats();
+            await loadMachines();
         }
         
-        document.getElementById('refresh-btn').addEventListener('click', () => {
-            console.log('Manual refresh triggered');
-            refreshData();
-        });
+        // Refresh button
+        document.getElementById('refresh-btn').addEventListener('click', refreshData);
         
         // Initial load
-        console.log('Dashboard loaded, fetching initial data...');
         refreshData();
         
         // Auto-refresh every 30 seconds
-        const refreshInterval = setInterval(refreshData, 30000);
-        console.log('Auto-refresh enabled (every 30 seconds)');
+        setInterval(refreshData, 30000);
     </script>
 </body>
 </html>
