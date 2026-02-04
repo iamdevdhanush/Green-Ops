@@ -3,123 +3,92 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - GreenOps</title>
+    <title>GreenOps Dashboard - Green IT Management</title>
     <link rel="stylesheet" href="/static/css/style.css">
-    <style>
-        .power-controls {
-            display: flex;
-            gap: 0.5rem;
-        }
-        .btn-power {
-            padding: 0.4rem 0.8rem;
-            font-size: 0.875rem;
-            border-radius: 4px;
-            border: none;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-sleep {
-            background: #3b82f6;
-            color: white;
-        }
-        .btn-sleep:hover {
-            background: #2563eb;
-        }
-        .btn-shutdown {
-            background: #ef4444;
-            color: white;
-        }
-        .btn-shutdown:hover {
-            background: #dc2626;
-        }
-        .btn-power:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        .bulk-actions {
-            margin-bottom: 1rem;
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-        .modal-content {
-            background-color: white;
-            margin: 15% auto;
-            padding: 2rem;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 500px;
-        }
-        .modal-buttons {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1.5rem;
-        }
-    </style>
 </head>
 <body>
+    <!-- Header -->
     <div class="header">
         <div class="container">
             <div class="header-content">
-                <div class="logo">GreenOps ⚡</div>
+                <div class="logo">GreenOps</div>
                 <ul class="nav-links">
-                    <li><span id="username-display" style="color: var(--gray-600);"></span></li>
+                    <li><span id="username-display"></span></li>
                     <li><a href="#" id="logout-btn">Logout</a></li>
                 </ul>
             </div>
         </div>
     </div>
 
+    <!-- Dashboard Content -->
     <div class="dashboard">
         <div class="container">
+            <!-- Dashboard Header -->
             <div class="dashboard-header">
-                <h1 class="dashboard-title">Dashboard</h1>
-                <button id="refresh-btn" class="btn btn-secondary">Refresh</button>
+                <div>
+                    <h1 class="dashboard-title">Green IT Dashboard</h1>
+                    <p style="color: var(--gray-600); margin-top: 0.5rem;">Monitor and manage your IT infrastructure's energy footprint</p>
+                </div>
+                <button id="refresh-btn" class="btn btn-secondary">🔄 Refresh</button>
             </div>
 
+            <!-- Energy Savings Banner -->
+            <div class="energy-banner">
+                <div class="energy-banner-icon">🌍</div>
+                <div class="energy-banner-content">
+                    <h3>Total Energy Saved Today</h3>
+                    <p id="energy-saved-today">Calculating...</p>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
             <div class="stats-grid">
-                <div class="stat-card">
+                <div class="stat-card total">
                     <div class="stat-label">Total Machines</div>
-                    <div class="stat-value" id="total-machines">0</div>
+                    <div class="stat-value" id="total-machines">-</div>
+                    <div class="stat-subtitle">Registered endpoints</div>
                 </div>
                 <div class="stat-card active">
-                    <div class="stat-label">Active</div>
-                    <div class="stat-value" id="active-machines">0</div>
+                    <div class="stat-label">Active Now</div>
+                    <div class="stat-value" id="active-machines">-</div>
+                    <div class="stat-subtitle">Currently in use</div>
                 </div>
                 <div class="stat-card idle">
                     <div class="stat-label">Idle</div>
-                    <div class="stat-value" id="idle-machines">0</div>
+                    <div class="stat-value" id="idle-machines">-</div>
+                    <div class="stat-subtitle">Wasting energy</div>
                 </div>
                 <div class="stat-card offline">
                     <div class="stat-label">Offline</div>
-                    <div class="stat-value" id="offline-machines">0</div>
+                    <div class="stat-value" id="offline-machines">-</div>
+                    <div class="stat-subtitle">Not connected</div>
+                </div>
+                <div class="stat-card energy">
+                    <div class="stat-label">Energy Waste (24h)</div>
+                    <div class="stat-value" id="energy-waste">-</div>
+                    <div class="stat-subtitle">kWh consumed by idle PCs</div>
                 </div>
             </div>
 
+            <!-- Machine Table -->
             <div class="table-container">
                 <div class="table-header">
                     <h2 class="table-title">Registered Machines</h2>
                 </div>
+                
+                <!-- Bulk Actions -->
                 <div style="padding: 1.5rem;">
                     <div class="bulk-actions">
-                        <button id="sleep-all-idle-btn" class="btn btn-primary">
-                            ⚡ Sleep All Idle PCs
+                        <button id="sleep-all-idle-btn" class="bulk-action-btn">
+                            💤 Put All Idle PCs to Sleep
                         </button>
-                        <span id="bulk-action-status" style="color: var(--success);"></span>
+                        <span id="bulk-action-status" style="color: var(--success); font-weight: 600;"></span>
                     </div>
                 </div>
+
+                <!-- Table Content -->
                 <div id="table-content">
-                    <div class="loading">Loading machines...</div>
+                    <div class="loading">Loading machine data...</div>
                 </div>
             </div>
         </div>
@@ -129,7 +98,7 @@
     <div id="confirm-modal" class="modal">
         <div class="modal-content">
             <h2 id="modal-title">Confirm Action</h2>
-            <p id="modal-message"></p>
+            <p id="modal-message" style="color: var(--gray-700); margin: 1rem 0;"></p>
             <div class="modal-buttons">
                 <button id="modal-confirm" class="btn btn-primary">Confirm</button>
                 <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
@@ -138,15 +107,18 @@
     </div>
 
     <script>
+        // Authentication Check
         const token = localStorage.getItem('token');
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         
         if (!token) {
+            console.log('No token found, redirecting to login');
             window.location.href = '/login';
         }
         
-        document.getElementById('username-display').textContent = user.username || 'Admin';
+        document.getElementById('username-display').textContent = `👤 ${user.username || 'Admin'}`;
         
+        // Logout Handler
         document.getElementById('logout-btn').addEventListener('click', (e) => {
             e.preventDefault();
             localStorage.removeItem('token');
@@ -154,6 +126,7 @@
             window.location.href = '/login';
         });
         
+        // Fetch with Authentication
         async function fetchWithAuth(url, options = {}) {
             const token = localStorage.getItem('token');
             
@@ -172,6 +145,7 @@
             const response = await fetch(url, { ...defaultOptions, ...options });
             
             if (response.status === 401 || response.status === 403) {
+                console.error('Auth failed, clearing storage');
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
                 window.location.href = '/login';
@@ -181,29 +155,60 @@
             return response;
         }
         
+        // Load Statistics
         async function loadStats() {
             try {
                 const response = await fetchWithAuth('/api/admin/stats');
                 const data = await response.json();
                 
+                console.log('Stats loaded:', data);
+                
+                // Update stat cards
                 document.getElementById('total-machines').textContent = data.total_machines || 0;
                 document.getElementById('active-machines').textContent = data.active_machines || 0;
                 document.getElementById('idle-machines').textContent = data.idle_machines || 0;
                 document.getElementById('offline-machines').textContent = data.offline_machines || 0;
+                
+                // Energy waste
+                const energyWaste = data.energy_waste_24h || 0;
+                document.getElementById('energy-waste').textContent = energyWaste.toFixed(2);
+                
+                // Calculate energy saved (hypothetical: if we had put idle PCs to sleep)
+                const idleCount = data.idle_machines || 0;
+                const potentialSavings = (idleCount * 0.095 * 24).toFixed(2); // 95W saved per PC per hour
+                document.getElementById('energy-saved-today').textContent = 
+                    `${potentialSavings} kWh potential savings from ${idleCount} idle PCs`;
+                
             } catch (error) {
                 console.error('Error loading stats:', error);
+                // Show error state
+                document.getElementById('total-machines').textContent = '?';
+                document.getElementById('active-machines').textContent = '?';
+                document.getElementById('idle-machines').textContent = '?';
+                document.getElementById('offline-machines').textContent = '?';
+                document.getElementById('energy-waste').textContent = '?';
             }
         }
         
+        // Load Machines
         async function loadMachines() {
             try {
                 const response = await fetchWithAuth('/api/admin/machines');
                 const data = await response.json();
                 
+                console.log('Machines loaded:', data.count, 'machines');
+                
                 const tableContent = document.getElementById('table-content');
                 
                 if (!data.machines || data.machines.length === 0) {
-                    tableContent.innerHTML = '<div class="loading">No machines registered yet.</div>';
+                    tableContent.innerHTML = `
+                        <div class="loading">
+                            <p>No machines registered yet.</p>
+                            <p style="font-size: 0.875rem; color: var(--gray-500); margin-top: 0.5rem;">
+                                Deploy the GreenOps agent on client PCs to start monitoring.
+                            </p>
+                        </div>
+                    `;
                     return;
                 }
                 
@@ -213,8 +218,9 @@
                             <tr>
                                 <th>PC ID</th>
                                 <th>MAC Address</th>
-                                <th>Department</th>
-                                <th>Lab</th>
+                                <th>Location</th>
+                                <th>Hostname</th>
+                                <th>OS</th>
                                 <th>Status</th>
                                 <th>Last Seen</th>
                                 <th>Power Control</th>
@@ -223,10 +229,11 @@
                         <tbody>
                             ${data.machines.map(machine => `
                                 <tr>
-                                    <td><strong>${machine.pc_id}</strong></td>
-                                    <td>${machine.mac_address}</td>
-                                    <td>${machine.department}</td>
-                                    <td>${machine.lab}</td>
+                                    <td><strong style="color: var(--primary-green);">${machine.pc_id}</strong></td>
+                                    <td style="font-family: monospace; font-size: 0.875rem;">${machine.mac_address}</td>
+                                    <td>${machine.department} / ${machine.lab}</td>
+                                    <td>${machine.hostname || 'N/A'}</td>
+                                    <td>${machine.os || 'Unknown'}</td>
                                     <td>
                                         <span class="status-badge status-${machine.status.toLowerCase()}">
                                             ${machine.status}
@@ -239,6 +246,7 @@
                                                 class="btn-power btn-sleep" 
                                                 onclick="sleepMachine(${machine.id}, '${machine.pc_id}')"
                                                 ${machine.status === 'OFFLINE' ? 'disabled' : ''}
+                                                title="Put this PC to sleep"
                                             >
                                                 💤 Sleep
                                             </button>
@@ -246,6 +254,7 @@
                                                 class="btn-power btn-shutdown" 
                                                 onclick="shutdownMachine(${machine.id}, '${machine.pc_id}')"
                                                 ${machine.status === 'OFFLINE' ? 'disabled' : ''}
+                                                title="Shutdown this PC"
                                             >
                                                 🔴 Shutdown
                                             </button>
@@ -258,120 +267,165 @@
                 `;
                 
                 tableContent.innerHTML = html;
+                
             } catch (error) {
                 console.error('Error loading machines:', error);
+                document.getElementById('table-content').innerHTML = 
+                    '<div class="loading" style="color: var(--danger);">Error loading machines. Please refresh the page.</div>';
             }
         }
         
+        // Format Date (Human-Readable)
         function formatDate(dateString) {
             if (!dateString) return 'Never';
-            const date = new Date(dateString);
-            const now = new Date();
-            const diffMs = now - date;
-            const diffMins = Math.floor(diffMs / 60000);
             
-            if (diffMins < 1) return 'Just now';
-            if (diffMins < 60) return `${diffMins} min ago`;
-            if (diffMins < 1440) return `${Math.floor(diffMins / 60)} hours ago`;
-            
-            return date.toLocaleString();
+            try {
+                const date = new Date(dateString);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                
+                if (diffMins < 1) return '🟢 Just now';
+                if (diffMins < 60) return `🟡 ${diffMins} min ago`;
+                if (diffMins < 1440) return `🟠 ${Math.floor(diffMins / 60)}h ago`;
+                
+                return '🔴 ' + date.toLocaleString();
+            } catch (e) {
+                return 'Invalid date';
+            }
         }
         
+        // Show Confirmation Modal
         function showModal(title, message, onConfirm) {
             document.getElementById('modal-title').textContent = title;
             document.getElementById('modal-message').textContent = message;
             document.getElementById('confirm-modal').style.display = 'block';
             
-            document.getElementById('modal-confirm').onclick = () => {
+            const confirmBtn = document.getElementById('modal-confirm');
+            const cancelBtn = document.getElementById('modal-cancel');
+            
+            // Remove old event listeners by cloning
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            const newCancelBtn = cancelBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+            cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+            
+            // Add new event listeners
+            newConfirmBtn.onclick = () => {
                 document.getElementById('confirm-modal').style.display = 'none';
                 onConfirm();
             };
             
-            document.getElementById('modal-cancel').onclick = () => {
+            newCancelBtn.onclick = () => {
                 document.getElementById('confirm-modal').style.display = 'none';
             };
         }
         
+        // Sleep Machine
         async function sleepMachine(machineId, pcId) {
             showModal(
-                'Confirm Sleep',
-                `Are you sure you want to put ${pcId} to sleep?`,
+                '💤 Confirm Sleep Action',
+                `Are you sure you want to put ${pcId} to sleep? The PC will enter low-power mode and can be woken up remotely or manually.`,
                 async () => {
                     try {
                         const response = await fetchWithAuth(`/api/power/sleep/${machineId}`, {
                             method: 'POST'
                         });
                         
-                        const data = await response.json();
-                        alert(data.message);
-                        
                         if (response.ok) {
+                            const data = await response.json();
+                            alert(`✅ ${data.message}\n\nThe PC will sleep within 60 seconds when the agent checks for commands.`);
                             setTimeout(refreshData, 2000);
+                        } else {
+                            const error = await response.json();
+                            alert(`❌ Failed: ${error.error}`);
                         }
                     } catch (error) {
-                        alert('Failed to send sleep command');
+                        alert('❌ Failed to send sleep command. Check your connection.');
+                        console.error(error);
                     }
                 }
             );
         }
         
+        // Shutdown Machine
         async function shutdownMachine(machineId, pcId) {
             showModal(
-                'Confirm Shutdown',
-                `Are you sure you want to shutdown ${pcId}? This will turn off the PC completely.`,
+                '🔴 Confirm Shutdown Action',
+                `WARNING: This will completely shut down ${pcId}. The PC will need to be manually powered on again. Continue?`,
                 async () => {
                     try {
                         const response = await fetchWithAuth(`/api/power/shutdown/${machineId}`, {
                             method: 'POST'
                         });
                         
-                        const data = await response.json();
-                        alert(data.message);
-                        
                         if (response.ok) {
+                            const data = await response.json();
+                            alert(`✅ ${data.message}\n\nThe PC will shutdown within 60 seconds.`);
                             setTimeout(refreshData, 2000);
+                        } else {
+                            const error = await response.json();
+                            alert(`❌ Failed: ${error.error}`);
                         }
                     } catch (error) {
-                        alert('Failed to send shutdown command');
+                        alert('❌ Failed to send shutdown command.');
+                        console.error(error);
                     }
                 }
             );
         }
         
+        // Sleep All Idle PCs
         document.getElementById('sleep-all-idle-btn').addEventListener('click', async () => {
             showModal(
-                'Confirm Bulk Sleep',
-                'This will put ALL idle PCs to sleep. Continue?',
+                '💤 Bulk Sleep Action',
+                'This will put ALL idle PCs to sleep at once. This is a great way to save energy! Continue?',
                 async () => {
                     try {
                         const response = await fetchWithAuth('/api/power/sleep-all-idle', {
                             method: 'POST'
                         });
                         
-                        const data = await response.json();
-                        
-                        document.getElementById('bulk-action-status').textContent = data.message;
-                        setTimeout(() => {
-                            document.getElementById('bulk-action-status').textContent = '';
-                        }, 5000);
-                        
-                        setTimeout(refreshData, 2000);
+                        if (response.ok) {
+                            const data = await response.json();
+                            const statusDiv = document.getElementById('bulk-action-status');
+                            statusDiv.textContent = `✅ ${data.message}`;
+                            
+                            setTimeout(() => {
+                                statusDiv.textContent = '';
+                            }, 10000);
+                            
+                            setTimeout(refreshData, 2000);
+                        } else {
+                            alert('❌ Failed to send bulk sleep command');
+                        }
                     } catch (error) {
-                        alert('Failed to send bulk sleep command');
+                        alert('❌ Connection error');
+                        console.error(error);
                     }
                 }
             );
         });
         
+        // Refresh All Data
         async function refreshData() {
-            await loadStats();
-            await loadMachines();
+            console.log('Refreshing dashboard...');
+            await Promise.all([loadStats(), loadMachines()]);
+            console.log('Dashboard refreshed');
         }
         
-        document.getElementById('refresh-btn').addEventListener('click', refreshData);
+        // Refresh Button
+        document.getElementById('refresh-btn').addEventListener('click', () => {
+            refreshData();
+        });
         
+        // Initial Load
+        console.log('Dashboard initializing...');
         refreshData();
+        
+        // Auto-refresh every 30 seconds
         setInterval(refreshData, 30000);
+        console.log('Auto-refresh enabled (30s interval)');
     </script>
 </body>
 </html>
