@@ -4,21 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - GreenOps</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/green_theme.css">
 </head>
 <body>
     <div class="login-container">
         <div class="login-box">
             <div class="login-header">
-                <h1>GreenOps</h1>
-                <p>Admin Login</p>
+                <h1>🌱 GreenOps</h1>
+                <p>Green IT Operations Platform</p>
             </div>
 
             <div id="error-message" class="alert alert-error hidden"></div>
 
             <form id="login-form">
                 <div class="form-group">
-                    <label class="form-label" for="username">Username</label>
+                    <label class="form-label" for="username">👤 Username</label>
                     <input 
                         type="text" 
                         id="username" 
@@ -26,11 +26,12 @@
                         class="form-input" 
                         required
                         autocomplete="username"
+                        placeholder="Enter your username"
                     >
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="password">Password</label>
+                    <label class="form-label" for="password">🔒 Password</label>
                     <input 
                         type="password" 
                         id="password" 
@@ -38,10 +39,15 @@
                         class="form-input" 
                         required
                         autocomplete="current-password"
+                        placeholder="Enter your password"
                     >
                 </div>
 
                 <button type="submit" class="btn btn-primary">Sign In</button>
+                
+                <p style="text-align: center; margin-top: 1rem; color: var(--gray-600); font-size: 0.875rem;">
+                    Default: admin / changeme
+                </p>
             </form>
         </div>
     </div>
@@ -68,19 +74,24 @@
                 const data = await response.json();
                 
                 if (response.ok) {
+                    // Save token and user data
                     localStorage.setItem('token', data.access_token);
                     localStorage.setItem('user', JSON.stringify(data.user));
                     
+                    console.log('Login successful, token saved');
+                    
+                    // Redirect based on password change requirement
                     if (data.user.must_change_password) {
                         window.location.href = '/change-password';
                     } else {
                         window.location.href = '/dashboard';
                     }
                 } else {
-                    errorDiv.textContent = data.error || 'Login failed';
+                    errorDiv.textContent = data.error || 'Login failed. Please check your credentials.';
                     errorDiv.classList.remove('hidden');
                 }
             } catch (error) {
+                console.error('Login error:', error);
                 errorDiv.textContent = 'Connection error. Please try again.';
                 errorDiv.classList.remove('hidden');
             }
