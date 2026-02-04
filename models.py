@@ -53,6 +53,7 @@ class Machine(db.Model):
     
     # Relationships
     metrics = db.relationship('Metric', backref='machine', lazy='dynamic', cascade='all, delete-orphan')
+    commands = db.relationship('PowerCommand', backref='machine', lazy='dynamic', cascade='all, delete-orphan')
     
     def to_dict(self):
         """Convert to dictionary"""
@@ -94,4 +95,31 @@ class Metric(db.Model):
             'disk_usage': self.disk_usage,
             'energy_waste_kwh': self.energy_waste_kwh,
             'timestamp': self.timestamp.isoformat() if self.timestamp else None
+        }
+
+
+class PowerCommand(db.Model):
+    """Power management commands for machines"""
+    __tablename__ = 'power_commands'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    machine_id = db.Column(db.Integer, db.ForeignKey('machines.id'), nullable=False, index=True)
+    command = db.Column(db.String(20), nullable=False)  # SLEEP, SHUTDOWN, RESTART
+    status = db.Column(db.String(20), default='PENDING', index=True)  # PENDING, EXECUTED, FAILED
+    issued_by = db.Column(db.String(80))  # Admin username
+    issued_at = db.Column(db.DateTime, default=datetime.utcnow)
+    executed_at = db.Column(db.DateTime)
+    error_message = db.Column(db.String(255))
+    
+    def to_dict(self):
+        """Convert to dictionary"""
+        return {
+            'id': self.id,
+            'machine_id': self.machine_id,
+            'command': self.command,
+            'status': self.status,
+            'issued_by': self.issued_by,
+            'issued_at': self.issued_at.isoformat() if self.issued_at else None,
+            'executed_at': self.executed_at.isoformat() if self.executed_at else None,
+            'error_message': self.error_message
         }
