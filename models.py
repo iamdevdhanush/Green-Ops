@@ -17,15 +17,12 @@ class User(db.Model):
     last_login = db.Column(db.DateTime)
     
     def set_password(self, password):
-        """Hash and set password"""
         self.password_hash = generate_password_hash(password)
     
     def check_password(self, password):
-        """Verify password"""
         return check_password_hash(self.password_hash, password)
     
     def to_dict(self):
-        """Convert to dictionary"""
         return {
             'id': self.id,
             'username': self.username,
@@ -37,7 +34,10 @@ class User(db.Model):
 
 
 class Machine(db.Model):
-    """Machine model for registered PCs"""
+    """
+    Machine model - REFACTORED
+    Status is computed from idle_seconds, NOT from last_seen
+    """
     __tablename__ = 'machines'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -47,16 +47,22 @@ class Machine(db.Model):
     lab = db.Column(db.String(50), nullable=False)
     hostname = db.Column(db.String(100))
     os = db.Column(db.String(100))
+    
+    # Status computed from idle_seconds and last_seen
     status = db.Column(db.String(20), default='ACTIVE', index=True)
-    first_seen = db.Column(db.DateTime, default=datetime.utcnow)
-    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # CRITICAL: idle_seconds is REAL OS idle time, not calculated
+    idle_seconds = db.Column(db.Integer, default=0)
+    
+    # Timestamps - NEVER use database defaults, always set explicitly
+    first_seen = db.Column(db.DateTime, nullable=False)
+    last_seen = db.Column(db.DateTime, nullable=False, index=True)
     
     # Relationships
     metrics = db.relationship('Metric', backref='machine', lazy='dynamic', cascade='all, delete-orphan')
     commands = db.relationship('PowerCommand', backref='machine', lazy='dynamic', cascade='all, delete-orphan')
     
     def to_dict(self):
-        """Convert to dictionary"""
         return {
             'id': self.id,
             'pc_id': self.pc_id,
@@ -66,30 +72,41 @@ class Machine(db.Model):
             'hostname': self.hostname,
             'os': self.os,
             'status': self.status,
+            'idle_seconds': self.idle_seconds,
             'first_seen': self.first_seen.isoformat() if self.first_seen else None,
             'last_seen': self.last_seen.isoformat() if self.last_seen else None
         }
 
 
 class Metric(db.Model):
-    """Metric model for storing machine metrics"""
+    """
+    Metric model - REFACTORED
+    Stores REAL idle_seconds from OS, not calculated values
+    """
     __tablename__ = 'metrics'
     
     id = db.Column(db.Integer, primary_key=True)
     machine_id = db.Column(db.Integer, db.ForeignKey('machines.id'), nullable=False, index=True)
-    idle_time_minutes = db.Column(db.Integer, default=0)
+    
+    # REAL idle time from OS (seconds)
+    idle_seconds = db.Column(db.Integer, default=0)
+    
+    # System metrics
     cpu_usage = db.Column(db.Float)
     memory_usage = db.Column(db.Float)
     disk_usage = db.Column(db.Float)
+    
+    # Energy waste calculated from idle_seconds
     energy_waste_kwh = db.Column(db.Float, default=0.0)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    # Timestamp - set explicitly
+    timestamp = db.Column(db.DateTime, nullable=False, index=True)
     
     def to_dict(self):
-        """Convert to dictionary"""
         return {
             'id': self.id,
             'machine_id': self.machine_id,
-            'idle_time_minutes': self.idle_time_minutes,
+            'idle_seconds': self.idle_seconds,
             'cpu_usage': self.cpu_usage,
             'memory_usage': self.memory_usage,
             'disk_usage': self.disk_usage,
@@ -99,20 +116,33 @@ class Metric(db.Model):
 
 
 class PowerCommand(db.Model):
-    """Power management commands for machines"""
+    """
+    Power command queue - REFACTORED for reliability
+    Commands are queued and executed by agent, not pushed
+    """
     __tablename__ = 'power_commands'
     
     id = db.Column(db.Integer, primary_key=True)
     machine_id = db.Column(db.Integer, db.ForeignKey('machines.id'), nullable=False, index=True)
-    command = db.Column(db.String(20), nullable=False)  # SLEEP, SHUTDOWN, RESTART
-    status = db.Column(db.String(20), default='PENDING', index=True)  # PENDING, EXECUTED, FAILED
+    
+    # Command type
+    command = db.Column(db.String(20), nullable=False)  # SLEEP, SHUTDOWN, RESTART, LOCK
+    
+    # Status tracking
+    status = db.Column(db.String(20), default='PENDING', index=True)  # PENDING, EXECUTING, EXECUTED, FAILED
+    
+    # Metadata
     issued_by = db.Column(db.String(80))  # Admin username
-    issued_at = db.Column(db.DateTime, default=datetime.utcnow)
+    issued_at = db.Column(db.DateTime, nullable=False)
     executed_at = db.Column(db.DateTime)
-    error_message = db.Column(db.String(255))
+    
+    # Result
+    result_message = db.Column(db.String(500))
+    
+    # Safety check - idle_seconds when command was issued
+    idle_seconds_at_issue = db.Column(db.Integer)
     
     def to_dict(self):
-        """Convert to dictionary"""
         return {
             'id': self.id,
             'machine_id': self.machine_id,
@@ -121,5 +151,6 @@ class PowerCommand(db.Model):
             'issued_by': self.issued_by,
             'issued_at': self.issued_at.isoformat() if self.issued_at else None,
             'executed_at': self.executed_at.isoformat() if self.executed_at else None,
-            'error_message': self.error_message
+            'result_message': self.result_message,
+            'idle_seconds_at_issue': self.idle_seconds_at_issue
         }
