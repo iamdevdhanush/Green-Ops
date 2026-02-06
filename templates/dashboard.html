@@ -1,431 +1,576 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GreenOps Dashboard - Green IT Management</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <title>GreenOps - Environmental Sustainability Dashboard</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <!-- Header -->
-    <div class="header">
-        <div class="container">
-            <div class="header-content">
-                <div class="logo">GreenOps</div>
-                <ul class="nav-links">
-                    <li><span id="username-display"></span></li>
-                    <li><a href="#" id="logout-btn">Logout</a></li>
-                </ul>
-            </div>
-        </div>
-    </div>
-
-    <!-- Dashboard Content -->
-    <div class="dashboard">
-        <div class="container">
-            <!-- Dashboard Header -->
-            <div class="dashboard-header">
-                <div>
-                    <h1 class="dashboard-title">Green IT Dashboard</h1>
-                    <p style="color: var(--gray-600); margin-top: 0.5rem;">Monitor and manage your IT infrastructure's energy footprint</p>
-                </div>
-                <button id="refresh-btn" class="btn btn-secondary">🔄 Refresh</button>
-            </div>
-
-            <!-- Energy Savings Banner -->
-            <div class="energy-banner">
-                <div class="energy-banner-icon">🌍</div>
-                <div class="energy-banner-content">
-                    <h3>Total Energy Saved Today</h3>
-                    <p id="energy-saved-today">Calculating...</p>
+    <!-- App Container -->
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon">🌱</div>
+                    <span>GreenOps</span>
                 </div>
             </div>
 
-            <!-- Stats Grid -->
-            <div class="stats-grid">
-                <div class="stat-card total">
-                    <div class="stat-label">Total Machines</div>
-                    <div class="stat-value" id="total-machines">-</div>
-                    <div class="stat-subtitle">Registered endpoints</div>
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Main</div>
+                    <a href="#" class="nav-item active">
+                        <span class="nav-item-icon">📊</span>
+                        <span>Dashboard</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-item-icon">💻</span>
+                        <span>Live Systems</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-item-icon">🏢</span>
+                        <span>Labs</span>
+                    </a>
                 </div>
-                <div class="stat-card active">
-                    <div class="stat-label">Active Now</div>
-                    <div class="stat-value" id="active-machines">-</div>
-                    <div class="stat-subtitle">Currently in use</div>
-                </div>
-                <div class="stat-card idle">
-                    <div class="stat-label">Idle</div>
-                    <div class="stat-value" id="idle-machines">-</div>
-                    <div class="stat-subtitle">Wasting energy</div>
-                </div>
-                <div class="stat-card offline">
-                    <div class="stat-label">Offline</div>
-                    <div class="stat-value" id="offline-machines">-</div>
-                    <div class="stat-subtitle">Not connected</div>
-                </div>
-                <div class="stat-card energy">
-                    <div class="stat-label">Energy Waste (24h)</div>
-                    <div class="stat-value" id="energy-waste">-</div>
-                    <div class="stat-subtitle">kWh consumed by idle PCs</div>
-                </div>
-            </div>
 
-            <!-- Machine Table -->
-            <div class="table-container">
-                <div class="table-header">
-                    <h2 class="table-title">Registered Machines</h2>
+                <div class="nav-section">
+                    <div class="nav-section-title">Analytics</div>
+                    <a href="#" class="nav-item">
+                        <span class="nav-item-icon">📈</span>
+                        <span>Energy Analytics</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-item-icon">🌍</span>
+                        <span>Carbon Footprint</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-item-icon">📉</span>
+                        <span>Waste Reduction</span>
+                    </a>
                 </div>
-                
-                <!-- Bulk Actions -->
-                <div style="padding: 1.5rem;">
-                    <div class="bulk-actions">
-                        <button id="sleep-all-idle-btn" class="bulk-action-btn">
-                            💤 Put All Idle PCs to Sleep
-                        </button>
-                        <span id="bulk-action-status" style="color: var(--success); font-weight: 600;"></span>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a href="#" class="nav-item">
+                        <span class="nav-item-icon">⚙️</span>
+                        <span>Policies</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-item-icon">🔔</span>
+                        <span>Alerts</span>
+                        <span class="nav-item-badge" id="alerts-count">0</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-item-icon">⚙️</span>
+                        <span>Settings</span>
+                    </a>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="search-bar">
+                    <span class="search-icon">🔍</span>
+                    <input 
+                        type="text" 
+                        class="search-input" 
+                        placeholder="Search PCs, labs, or departments..."
+                        id="global-search"
+                    >
+                </div>
+
+                <div class="top-bar-stats">
+                    <div class="top-stat">
+                        <span class="top-stat-label">Energy Saved Today</span>
+                        <span class="top-stat-value" id="top-energy-saved">0.00 kWh</span>
+                    </div>
+                    <div class="top-stat">
+                        <span class="top-stat-label">Active Systems</span>
+                        <span class="top-stat-value" id="top-active-count">0</span>
                     </div>
                 </div>
 
-                <!-- Table Content -->
-                <div id="table-content">
-                    <div class="loading">Loading machine data...</div>
+                <div class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">
+                    <div class="theme-toggle-thumb"></div>
+                </div>
+
+                <div class="user-menu" onclick="showUserMenu()">
+                    <div class="user-avatar" id="user-avatar">A</div>
+                    <span id="user-name">Admin</span>
                 </div>
             </div>
-        </div>
+
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Page Header -->
+                <div class="page-header">
+                    <h1 class="page-title">Environmental Dashboard</h1>
+                    <p class="page-subtitle">Real-time sustainability metrics and system monitoring</p>
+                </div>
+
+                <!-- Metrics Grid -->
+                <div class="metrics-grid">
+                    <!-- Active PCs -->
+                    <div class="metric-card active">
+                        <div class="metric-header">
+                            <div class="metric-icon">✅</div>
+                            <div class="metric-trend down">↓ 12%</div>
+                        </div>
+                        <div class="metric-label">Active PCs</div>
+                        <div class="metric-value" id="metric-active">0</div>
+                        <div class="metric-subtitle">Currently in use</div>
+                    </div>
+
+                    <!-- Idle PCs -->
+                    <div class="metric-card idle">
+                        <div class="metric-header">
+                            <div class="metric-icon">⏸️</div>
+                            <div class="metric-trend up">↑ 8%</div>
+                        </div>
+                        <div class="metric-label">Idle PCs</div>
+                        <div class="metric-value" id="metric-idle">0</div>
+                        <div class="metric-subtitle">Wasting energy</div>
+                    </div>
+
+                    <!-- Sleeping PCs -->
+                    <div class="metric-card sleeping">
+                        <div class="metric-header">
+                            <div class="metric-icon">💤</div>
+                            <div class="metric-trend down">↓ 15%</div>
+                        </div>
+                        <div class="metric-label">Sleeping PCs</div>
+                        <div class="metric-value" id="metric-sleeping">0</div>
+                        <div class="metric-subtitle">Power saving mode</div>
+                    </div>
+
+                    <!-- Offline PCs -->
+                    <div class="metric-card offline">
+                        <div class="metric-header">
+                            <div class="metric-icon">❌</div>
+                            <div class="metric-trend">→ 0%</div>
+                        </div>
+                        <div class="metric-label">Offline PCs</div>
+                        <div class="metric-value" id="metric-offline">0</div>
+                        <div class="metric-subtitle">Disconnected</div>
+                    </div>
+
+                    <!-- Energy Savings (spans 2 columns) -->
+                    <div class="metric-card energy-card">
+                        <div class="metric-header">
+                            <div class="metric-icon">⚡</div>
+                        </div>
+                        <div class="metric-label">Energy Saved Today</div>
+                        <div class="metric-value" id="metric-energy">0.00</div>
+                        <div class="metric-subtitle">kWh conserved</div>
+                        
+                        <div class="energy-stats">
+                            <div class="energy-stat-item">
+                                <div class="energy-stat-label">Weekly</div>
+                                <div class="energy-stat-value" id="energy-weekly">0.0 kWh</div>
+                            </div>
+                            <div class="energy-stat-item">
+                                <div class="energy-stat-label">CO₂ Reduced</div>
+                                <div class="energy-stat-value" id="co2-saved">0.0 kg</div>
+                            </div>
+                            <div class="energy-stat-item">
+                                <div class="energy-stat-label">Cost Saved</div>
+                                <div class="energy-stat-value" id="cost-saved">$0.00</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Systems Panel -->
+                <div class="section-card">
+                    <div class="section-header">
+                        <h2 class="section-title">Live Systems</h2>
+                        <div class="section-actions">
+                            <button class="btn btn-secondary btn-icon" onclick="refreshSystems()" title="Refresh">
+                                🔄
+                            </button>
+                            <button class="btn btn-primary" onclick="sleepAllIdle()">
+                                💤 Sleep All Idle
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="pc-grid" id="pc-grid">
+                        <!-- PC tiles will be dynamically inserted here -->
+                    </div>
+                </div>
+
+                <!-- Lab Heatmap -->
+                <div class="heatmap-container">
+                    <div class="section-header">
+                        <h2 class="section-title">Lab Overview</h2>
+                        <div class="section-subtitle">Real-time system status heatmap</div>
+                    </div>
+                    <div class="heatmap-grid" id="heatmap-grid">
+                        <!-- Heatmap cells will be dynamically inserted -->
+                    </div>
+                </div>
+
+                <!-- Activity Timeline -->
+                <div class="timeline">
+                    <div class="section-header">
+                        <h2 class="section-title">Recent Activity</h2>
+                    </div>
+                    <div id="timeline-content">
+                        <!-- Timeline items will be dynamically inserted -->
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
 
     <!-- Confirmation Modal -->
-    <div id="confirm-modal" class="modal">
-        <div class="modal-content">
-            <h2 id="modal-title">Confirm Action</h2>
-            <p id="modal-message" style="color: var(--gray-700); margin: 1rem 0;"></p>
-            <div class="modal-buttons">
-                <button id="modal-confirm" class="btn btn-primary">Confirm</button>
-                <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+    <div class="modal-overlay hidden" id="modal-overlay" onclick="closeModal()">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-title">Confirm Action</h3>
+            </div>
+            <div class="modal-body">
+                <p id="modal-message"></p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" id="modal-confirm">Confirm</button>
             </div>
         </div>
     </div>
 
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
     <script>
-        // Authentication Check
+        // ============================================
+        // AUTHENTICATION
+        // ============================================
         const token = localStorage.getItem('token');
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         
         if (!token) {
-            console.log('No token found, redirecting to login');
             window.location.href = '/login';
         }
         
-        document.getElementById('username-display').textContent = `👤 ${user.username || 'Admin'}`;
-        
-        // Logout Handler
-        document.getElementById('logout-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            window.location.href = '/login';
-        });
-        
-        // Fetch with Authentication
+        // Set user info
+        if (user.username) {
+            document.getElementById('user-name').textContent = user.username;
+            document.getElementById('user-avatar').textContent = user.username[0].toUpperCase();
+        }
+
+        // ============================================
+        // THEME TOGGLE
+        // ============================================
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            
+            const toggle = document.getElementById('theme-toggle');
+            toggle.classList.toggle('dark');
+        }
+
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        if (savedTheme === 'dark') {
+            document.getElementById('theme-toggle').classList.add('dark');
+        }
+
+        // ============================================
+        // API UTILITIES
+        // ============================================
         async function fetchWithAuth(url, options = {}) {
-            const token = localStorage.getItem('token');
-            
-            if (!token) {
-                window.location.href = '/login';
-                throw new Error('No token');
-            }
-            
-            const defaultOptions = {
+            const response = await fetch(url, {
+                ...options,
                 headers: {
                     'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    ...options.headers
                 }
-            };
+            });
             
-            const response = await fetch(url, { ...defaultOptions, ...options });
-            
-            if (response.status === 401 || response.status === 403) {
-                console.error('Auth failed, clearing storage');
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
+            if (response.status === 401) {
+                localStorage.clear();
                 window.location.href = '/login';
                 throw new Error('Unauthorized');
             }
             
             return response;
         }
-        
-        // Load Statistics
+
+        // ============================================
+        // TOAST NOTIFICATIONS
+        // ============================================
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <span class="toast-icon">${type === 'success' ? '✓' : '✗'}</span>
+                <span>${message}</span>
+            `;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // ============================================
+        // MODAL
+        // ============================================
+        function showModal(title, message, onConfirm) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-message').textContent = message;
+            document.getElementById('modal-overlay').classList.remove('hidden');
+            
+            const confirmBtn = document.getElementById('modal-confirm');
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+            
+            newConfirmBtn.onclick = () => {
+                closeModal();
+                onConfirm();
+            };
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.add('hidden');
+        }
+
+        // ============================================
+        // DATA LOADING
+        // ============================================
         async function loadStats() {
             try {
                 const response = await fetchWithAuth('/api/admin/stats');
                 const data = await response.json();
                 
-                console.log('Stats loaded:', data);
+                // Update metric cards
+                document.getElementById('metric-active').textContent = data.active_machines || 0;
+                document.getElementById('metric-idle').textContent = data.idle_machines || 0;
+                document.getElementById('metric-sleeping').textContent = 0; // Calculate from status
+                document.getElementById('metric-offline').textContent = data.offline_machines || 0;
                 
-                // Update stat cards
-                document.getElementById('total-machines').textContent = data.total_machines || 0;
-                document.getElementById('active-machines').textContent = data.active_machines || 0;
-                document.getElementById('idle-machines').textContent = data.idle_machines || 0;
-                document.getElementById('offline-machines').textContent = data.offline_machines || 0;
+                // Energy metrics
+                const energyWaste = parseFloat(data.energy_waste_24h) || 0;
+                document.getElementById('metric-energy').textContent = energyWaste.toFixed(2);
+                document.getElementById('energy-weekly').textContent = (energyWaste * 7).toFixed(1) + ' kWh';
                 
-                // Energy waste
-                const energyWaste = data.energy_waste_24h || 0;
-                document.getElementById('energy-waste').textContent = energyWaste.toFixed(2);
+                // CO2 calculation (0.417 kg per kWh)
+                const co2 = (energyWaste * 0.417).toFixed(1);
+                document.getElementById('co2-saved').textContent = co2 + ' kg';
                 
-                // Calculate energy saved (hypothetical: if we had put idle PCs to sleep)
-                const idleCount = data.idle_machines || 0;
-                const potentialSavings = (idleCount * 0.095 * 24).toFixed(2); // 95W saved per PC per hour
-                document.getElementById('energy-saved-today').textContent = 
-                    `${potentialSavings} kWh potential savings from ${idleCount} idle PCs`;
+                // Cost calculation ($0.12 per kWh)
+                const cost = (energyWaste * 0.12).toFixed(2);
+                document.getElementById('cost-saved').textContent = '$' + cost;
+                
+                // Top bar stats
+                document.getElementById('top-energy-saved').textContent = energyWaste.toFixed(2) + ' kWh';
+                document.getElementById('top-active-count').textContent = data.active_machines || 0;
                 
             } catch (error) {
                 console.error('Error loading stats:', error);
-                // Show error state
-                document.getElementById('total-machines').textContent = '?';
-                document.getElementById('active-machines').textContent = '?';
-                document.getElementById('idle-machines').textContent = '?';
-                document.getElementById('offline-machines').textContent = '?';
-                document.getElementById('energy-waste').textContent = '?';
             }
         }
-        
-        // Load Machines
+
         async function loadMachines() {
             try {
                 const response = await fetchWithAuth('/api/admin/machines');
                 const data = await response.json();
                 
-                console.log('Machines loaded:', data.count, 'machines');
-                
-                const tableContent = document.getElementById('table-content');
+                const grid = document.getElementById('pc-grid');
+                const heatmap = document.getElementById('heatmap-grid');
                 
                 if (!data.machines || data.machines.length === 0) {
-                    tableContent.innerHTML = `
-                        <div class="loading">
-                            <p>No machines registered yet.</p>
-                            <p style="font-size: 0.875rem; color: var(--gray-500); margin-top: 0.5rem;">
-                                Deploy the GreenOps agent on client PCs to start monitoring.
-                            </p>
-                        </div>
-                    `;
+                    grid.innerHTML = '<p style="text-align: center; color: var(--text-secondary); grid-column: 1/-1;">No systems registered yet</p>';
                     return;
                 }
                 
-                const html = `
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>PC ID</th>
-                                <th>MAC Address</th>
-                                <th>Location</th>
-                                <th>Hostname</th>
-                                <th>OS</th>
-                                <th>Status</th>
-                                <th>Last Seen</th>
-                                <th>Power Control</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${data.machines.map(machine => `
-                                <tr>
-                                    <td><strong style="color: var(--primary-green);">${machine.pc_id}</strong></td>
-                                    <td style="font-family: monospace; font-size: 0.875rem;">${machine.mac_address}</td>
-                                    <td>${machine.department} / ${machine.lab}</td>
-                                    <td>${machine.hostname || 'N/A'}</td>
-                                    <td>${machine.os || 'Unknown'}</td>
-                                    <td>
-                                        <span class="status-badge status-${machine.status.toLowerCase()}">
-                                            ${machine.status}
-                                        </span>
-                                    </td>
-                                    <td>${formatDate(machine.last_seen)}</td>
-                                    <td>
-                                        <div class="power-controls">
-                                            <button 
-                                                class="btn-power btn-sleep" 
-                                                onclick="sleepMachine(${machine.id}, '${machine.pc_id}')"
-                                                ${machine.status === 'OFFLINE' ? 'disabled' : ''}
-                                                title="Put this PC to sleep"
-                                            >
-                                                💤 Sleep
-                                            </button>
-                                            <button 
-                                                class="btn-power btn-shutdown" 
-                                                onclick="shutdownMachine(${machine.id}, '${machine.pc_id}')"
-                                                ${machine.status === 'OFFLINE' ? 'disabled' : ''}
-                                                title="Shutdown this PC"
-                                            >
-                                                🔴 Shutdown
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
+                // Render PC tiles
+                grid.innerHTML = data.machines.map(pc => `
+                    <div class="pc-tile ${pc.status.toLowerCase()}">
+                        <div class="pc-tile-header">
+                            <span class="pc-name">${pc.pc_id}</span>
+                            <span class="pc-status-dot"></span>
+                        </div>
+                        <div class="pc-info">
+                            <div class="pc-info-row">📍 ${pc.department} / ${pc.lab}</div>
+                            <div class="pc-info-row">🖥️ ${pc.hostname || 'Unknown'}</div>
+                            <div class="pc-info-row">⏱️ ${formatLastSeen(pc.last_seen)}</div>
+                        </div>
+                        <div class="pc-metrics">
+                            <div class="pc-metric">
+                                <span class="pc-metric-label">Idle</span>
+                                <div class="pc-metric-bar">
+                                    <div class="pc-metric-fill" style="width: ${Math.min((pc.idle_seconds || 0) / 900 * 100, 100)}%"></div>
+                                </div>
+                                <span class="pc-metric-value">${formatIdleTime(pc.idle_seconds || 0)}</span>
+                            </div>
+                        </div>
+                        <div class="pc-actions">
+                            <button 
+                                class="pc-action-btn sleep" 
+                                onclick="sleepPC(${pc.id}, '${pc.pc_id}')"
+                                ${pc.status === 'OFFLINE' ? 'disabled' : ''}
+                            >
+                                💤 Sleep
+                            </button>
+                            <button 
+                                class="pc-action-btn shutdown" 
+                                onclick="shutdownPC(${pc.id}, '${pc.pc_id}')"
+                                ${pc.status === 'OFFLINE' ? 'disabled' : ''}
+                            >
+                                ⏻ Shutdown
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
                 
-                tableContent.innerHTML = html;
+                // Render heatmap
+                heatmap.innerHTML = data.machines.map(pc => `
+                    <div 
+                        class="heatmap-cell ${pc.status.toLowerCase()}" 
+                        title="${pc.pc_id} - ${pc.status}"
+                    ></div>
+                `).join('');
                 
             } catch (error) {
                 console.error('Error loading machines:', error);
-                document.getElementById('table-content').innerHTML = 
-                    '<div class="loading" style="color: var(--danger);">Error loading machines. Please refresh the page.</div>';
             }
         }
-        
-        // Format Date (Human-Readable)
-        function formatDate(dateString) {
-            if (!dateString) return 'Never';
-            
-            try {
-                const date = new Date(dateString);
-                const now = new Date();
-                const diffMs = now - date;
-                const diffMins = Math.floor(diffMs / 60000);
-                
-                if (diffMins < 1) return '🟢 Just now';
-                if (diffMins < 60) return `🟡 ${diffMins} min ago`;
-                if (diffMins < 1440) return `🟠 ${Math.floor(diffMins / 60)}h ago`;
-                
-                return '🔴 ' + date.toLocaleString();
-            } catch (e) {
-                return 'Invalid date';
-            }
-        }
-        
-        // Show Confirmation Modal
-        function showModal(title, message, onConfirm) {
-            document.getElementById('modal-title').textContent = title;
-            document.getElementById('modal-message').textContent = message;
-            document.getElementById('confirm-modal').style.display = 'block';
-            
-            const confirmBtn = document.getElementById('modal-confirm');
-            const cancelBtn = document.getElementById('modal-cancel');
-            
-            // Remove old event listeners by cloning
-            const newConfirmBtn = confirmBtn.cloneNode(true);
-            const newCancelBtn = cancelBtn.cloneNode(true);
-            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-            cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-            
-            // Add new event listeners
-            newConfirmBtn.onclick = () => {
-                document.getElementById('confirm-modal').style.display = 'none';
-                onConfirm();
-            };
-            
-            newCancelBtn.onclick = () => {
-                document.getElementById('confirm-modal').style.display = 'none';
-            };
-        }
-        
-        // Sleep Machine
-        async function sleepMachine(machineId, pcId) {
+
+        // ============================================
+        // POWER ACTIONS
+        // ============================================
+        async function sleepPC(id, pcId) {
             showModal(
-                '💤 Confirm Sleep Action',
-                `Are you sure you want to put ${pcId} to sleep? The PC will enter low-power mode and can be woken up remotely or manually.`,
+                'Confirm Sleep',
+                `Put ${pcId} to sleep? This will enter low-power mode.`,
                 async () => {
                     try {
-                        const response = await fetchWithAuth(`/api/power/sleep/${machineId}`, {
+                        const response = await fetchWithAuth(`/api/power/sleep/${id}`, {
                             method: 'POST'
                         });
                         
                         if (response.ok) {
-                            const data = await response.json();
-                            alert(`✅ ${data.message}\n\nThe PC will sleep within 60 seconds when the agent checks for commands.`);
+                            showToast(`Sleep command sent to ${pcId}`, 'success');
                             setTimeout(refreshData, 2000);
                         } else {
                             const error = await response.json();
-                            alert(`❌ Failed: ${error.error}`);
+                            showToast(error.error || 'Failed to send command', 'error');
                         }
                     } catch (error) {
-                        alert('❌ Failed to send sleep command. Check your connection.');
-                        console.error(error);
+                        showToast('Connection error', 'error');
                     }
                 }
             );
         }
-        
-        // Shutdown Machine
-        async function shutdownMachine(machineId, pcId) {
+
+        async function shutdownPC(id, pcId) {
             showModal(
-                '🔴 Confirm Shutdown Action',
-                `WARNING: This will completely shut down ${pcId}. The PC will need to be manually powered on again. Continue?`,
+                'Confirm Shutdown',
+                `WARNING: This will shut down ${pcId}. The PC must be manually powered on again.`,
                 async () => {
                     try {
-                        const response = await fetchWithAuth(`/api/power/shutdown/${machineId}`, {
+                        const response = await fetchWithAuth(`/api/power/shutdown/${id}`, {
                             method: 'POST'
                         });
                         
                         if (response.ok) {
-                            const data = await response.json();
-                            alert(`✅ ${data.message}\n\nThe PC will shutdown within 60 seconds.`);
+                            showToast(`Shutdown command sent to ${pcId}`, 'success');
                             setTimeout(refreshData, 2000);
                         } else {
                             const error = await response.json();
-                            alert(`❌ Failed: ${error.error}`);
+                            showToast(error.error || 'Failed to send command', 'error');
                         }
                     } catch (error) {
-                        alert('❌ Failed to send shutdown command.');
-                        console.error(error);
+                        showToast('Connection error', 'error');
                     }
                 }
             );
         }
-        
-        // Sleep All Idle PCs
-        document.getElementById('sleep-all-idle-btn').addEventListener('click', async () => {
+
+        async function sleepAllIdle() {
             showModal(
-                '💤 Bulk Sleep Action',
-                'This will put ALL idle PCs to sleep at once. This is a great way to save energy! Continue?',
+                'Sleep All Idle PCs',
+                'This will put all idle PCs to sleep. Only PCs that have been idle for the threshold period will be affected.',
                 async () => {
                     try {
                         const response = await fetchWithAuth('/api/power/sleep-all-idle', {
                             method: 'POST'
                         });
                         
-                        if (response.ok) {
-                            const data = await response.json();
-                            const statusDiv = document.getElementById('bulk-action-status');
-                            statusDiv.textContent = `✅ ${data.message}`;
-                            
-                            setTimeout(() => {
-                                statusDiv.textContent = '';
-                            }, 10000);
-                            
-                            setTimeout(refreshData, 2000);
-                        } else {
-                            alert('❌ Failed to send bulk sleep command');
-                        }
+                        const data = await response.json();
+                        showToast(data.message || 'Commands sent', 'success');
+                        setTimeout(refreshData, 2000);
                     } catch (error) {
-                        alert('❌ Connection error');
-                        console.error(error);
+                        showToast('Failed to send bulk command', 'error');
                     }
                 }
             );
-        });
-        
-        // Refresh All Data
-        async function refreshData() {
-            console.log('Refreshing dashboard...');
-            await Promise.all([loadStats(), loadMachines()]);
-            console.log('Dashboard refreshed');
         }
-        
-        // Refresh Button
-        document.getElementById('refresh-btn').addEventListener('click', () => {
+
+        // ============================================
+        // UTILITIES
+        // ============================================
+        function formatLastSeen(dateString) {
+            if (!dateString) return 'Never';
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+            return date.toLocaleDateString();
+        }
+
+        function formatIdleTime(seconds) {
+            if (seconds < 60) return `${seconds}s`;
+            const mins = Math.floor(seconds / 60);
+            if (mins < 60) return `${mins}m`;
+            const hours = Math.floor(mins / 60);
+            return `${hours}h`;
+        }
+
+        function refreshSystems() {
+            showToast('Refreshing systems...', 'success');
             refreshData();
-        });
-        
-        // Initial Load
-        console.log('Dashboard initializing...');
+        }
+
+        async function refreshData() {
+            await Promise.all([loadStats(), loadMachines()]);
+        }
+
+        function showUserMenu() {
+            // Logout
+            if (confirm('Logout?')) {
+                localStorage.clear();
+                window.location.href = '/login';
+            }
+        }
+
+        // ============================================
+        // INITIALIZE
+        // ============================================
         refreshData();
+        setInterval(refreshData, 5000); // Refresh every 5 seconds
         
-        // Auto-refresh every 30 seconds
-        setInterval(refreshData, 30000);
-        console.log('Auto-refresh enabled (30s interval)');
+        console.log('🌱 GreenOps Dashboard Initialized');
     </script>
 </body>
 </html>
