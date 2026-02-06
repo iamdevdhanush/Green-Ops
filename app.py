@@ -3,7 +3,7 @@ from flask_jwt_extended import JWTManager
 from models import db, User
 from config import Config
 from routes_auth import auth_bp
-from routes_agent_fixed import agent_bp
+from routes_agent import agent_bp
 from routes_admin import admin_bp
 from routes_power import power_bp
 import sys
