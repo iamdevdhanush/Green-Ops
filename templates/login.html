@@ -4,51 +4,250 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - GreenOps</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #F4F7F5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Subtle eco background pattern */
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(46,125,50,0.03), transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(102,187,106,0.03), transparent 50%);
+            pointer-events: none;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 440px;
+            max-width: 90%;
+            padding: 48px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .logo-container {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #2E7D32, #66BB6A);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            font-size: 32px;
+        }
+
+        .login-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #212121;
+            margin-bottom: 8px;
+        }
+
+        .login-subtitle {
+            font-size: 15px;
+            color: #616161;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #212121;
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #E0E0E0;
+            border-radius: 12px;
+            font-size: 15px;
+            font-family: inherit;
+            transition: all 0.2s;
+            background: #FAFAFA;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #2E7D32;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(46,125,50,0.1);
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #2E7D32, #66BB6A);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(46,125,50,0.2);
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(46,125,50,0.3);
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+        .alert {
+            padding: 14px 16px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .alert-error {
+            background: #FFEBEE;
+            border: 2px solid #FFCDD2;
+            color: #C62828;
+        }
+
+        .alert-success {
+            background: #E8F5E9;
+            border: 2px solid #C8E6C9;
+            color: #2E7D32;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .default-creds {
+            margin-top: 24px;
+            padding: 16px;
+            background: #E8F5E9;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .default-creds-title {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #2E7D32;
+            margin-bottom: 8px;
+        }
+
+        .default-creds-text {
+            font-size: 14px;
+            color: #1B5E20;
+            font-family: 'Courier New', monospace;
+        }
+
+        .footer-text {
+            text-align: center;
+            margin-top: 32px;
+            font-size: 13px;
+            color: #9E9E9E;
+        }
+
+        .eco-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: #E8F5E9;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #2E7D32;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+    </style>
 </head>
 <body>
     <div class="login-container">
-        <div class="login-box">
-            <div class="login-header">
-                <h1>🌱 GreenOps</h1>
-                <p>Green IT Operations Platform</p>
+        <div class="login-header">
+            <div class="logo-container">🌱</div>
+            <h1 class="login-title">GreenOps</h1>
+            <p class="login-subtitle">Environmental Sustainability Platform</p>
+            <div class="eco-badge">
+                <span>🌍</span>
+                <span>Reducing IT Carbon Footprint</span>
+            </div>
+        </div>
+
+        <div id="error-message" class="alert alert-error hidden"></div>
+        <div id="success-message" class="alert alert-success hidden"></div>
+
+        <form id="login-form">
+            <div class="form-group">
+                <label class="form-label" for="username">Username</label>
+                <input 
+                    type="text" 
+                    id="username" 
+                    class="form-input" 
+                    placeholder="Enter your username"
+                    required
+                    autocomplete="username"
+                >
             </div>
 
-            <div id="error-message" class="alert alert-error hidden"></div>
+            <div class="form-group">
+                <label class="form-label" for="password">Password</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    class="form-input" 
+                    placeholder="Enter your password"
+                    required
+                    autocomplete="current-password"
+                >
+            </div>
 
-            <form id="login-form">
-                <div class="form-group">
-                    <label class="form-label" for="username">👤 Username</label>
-                    <input 
-                        type="text" 
-                        id="username" 
-                        name="username" 
-                        class="form-input" 
-                        required
-                        autocomplete="username"
-                        placeholder="Enter your username"
-                    >
-                </div>
+            <button type="submit" class="btn-login">Sign In</button>
+        </form>
 
-                <div class="form-group">
-                    <label class="form-label" for="password">🔒 Password</label>
-                    <input 
-                        type="password" 
-                        id="password" 
-                        name="password" 
-                        class="form-input" 
-                        required
-                        autocomplete="current-password"
-                        placeholder="Enter your password"
-                    >
-                </div>
+        <div class="default-creds">
+            <div class="default-creds-title">Default Credentials</div>
+            <div class="default-creds-text">admin / changeme</div>
+        </div>
 
-                <button type="submit" class="btn btn-primary">Sign In</button>
-                
-                <p style="text-align: center; margin-top: 1rem; color: var(--gray-600); font-size: 0.875rem;">
-                    Default: admin / changeme
-                </p>
-            </form>
+        <div class="footer-text">
+            Secure access to environmental monitoring
         </div>
     </div>
 
@@ -59,8 +258,10 @@
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const errorDiv = document.getElementById('error-message');
+            const successDiv = document.getElementById('success-message');
             
             errorDiv.classList.add('hidden');
+            successDiv.classList.add('hidden');
             
             try {
                 const response = await fetch('/api/auth/login', {
@@ -74,24 +275,22 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    // Save token and user data
                     localStorage.setItem('token', data.access_token);
                     localStorage.setItem('user', JSON.stringify(data.user));
                     
-                    console.log('Login successful, token saved');
+                    successDiv.textContent = 'Login successful! Redirecting...';
+                    successDiv.classList.remove('hidden');
                     
-                    // Redirect based on password change requirement
                     if (data.user.must_change_password) {
-                        window.location.href = '/change-password';
+                        setTimeout(() => window.location.href = '/change-password', 1000);
                     } else {
-                        window.location.href = '/dashboard';
+                        setTimeout(() => window.location.href = '/dashboard', 1000);
                     }
                 } else {
-                    errorDiv.textContent = data.error || 'Login failed. Please check your credentials.';
+                    errorDiv.textContent = data.error || 'Invalid credentials';
                     errorDiv.classList.remove('hidden');
                 }
             } catch (error) {
-                console.error('Login error:', error);
                 errorDiv.textContent = 'Connection error. Please try again.';
                 errorDiv.classList.remove('hidden');
             }
